@@ -7,7 +7,7 @@ const {
 } = require("node-thermal-printer");
 
 const admin = require("firebase-admin");
-const serviceAccount = require("./asianlepos-firebase-adminsdk-fbsvc-f7068ecfc2.json");
+const serviceAccount = require("./asianlepos-firebase-adminsdk-fbsvc-97798208bf.json");
 
 // ========== CONFIGURATION ==========
 const CONFIG = {
@@ -251,12 +251,23 @@ function groupItemsByKitchen(items, excludeTogo = false) {
 }
 
 /**
- * Gets to-go items from processed items
- * @param {Array} items - Processed order items
- * @returns {Array} Array of to-go items
+ * Returns subtotal, pst, gst, grandTotal from order.taxBreakDown or fallback calculation
+ * @param {object} order - Order object (may have taxBreakDown)
+ * @param {number} [fallbackSubtotal] - Subtotal when taxBreakDown missing (e.g. for to-go ticket)
+ * @returns {{ subtotal: number, pst: number, gst: number, grandTotal: number }}
  */
-function getTogoItems(items) {
-  return items.filter((item) => item.togo && !item.appetizer);
+function getOrderTotals(order, fallbackSubtotal) {
+  const tb = order.taxBreakDown || order.taxbreakdown;
+  if (tb && typeof tb.grandTotal === "number") {
+    const subtotal = typeof tb.total === "number" ? tb.total : (fallbackSubtotal ?? 0);
+    const pst = typeof tb.pst === "number" ? tb.pst : 0;
+    const gst = typeof tb.gst === "number" ? tb.gst : 0;
+    return { subtotal, pst, gst, grandTotal: tb.grandTotal };
+  }
+  const sub = fallbackSubtotal ?? order.total ?? 0;
+  const pst = sub * CONFIG.TAX.PST_RATE;
+  const gst = sub * CONFIG.TAX.GST_RATE;
+  return { subtotal: sub, pst, gst, grandTotal: sub + pst + gst };
 }
 
 /**
@@ -461,14 +472,9 @@ function printOrderItem(printer, item) {
   // Options
   if (item.options?.length > 0) {
     item.options.forEach((opt) => {
-      const optName =
-        opt.quantity > 1 ? `${opt.quantity}x ${opt.name}` : opt.name;
+      const optName = opt.quantity > 1 ? `${opt.quantity}x ${opt.name}` : opt.name;
 
-      const optPrice = opt.price
-        ? opt.quantity
-          ? `+$${(opt.price * opt.quantity).toFixed(2)}`
-          : `+$${opt.price.toFixed(2)}`
-        : "";
+      const optPrice = opt.price > 0 ? `${opt.quantity}x ${opt.price.toFixed(2)}` : "";
       printer.leftRight(`   • ${optName}`, optPrice);
       printer.newLine();
     });
@@ -479,7 +485,7 @@ function printOrderItem(printer, item) {
     item.extras.forEach((extra) => {
       printer.leftRight(
         `   + Add Extra: ${extra.description.toUpperCase()}`,
-        extra.price > 0 ? `+$${extra.price.toFixed(2)}` : ""
+        extra.price > 0 ? `$${extra.price.toFixed(2)}` : ""
       );
       printer.newLine();
     });
@@ -490,7 +496,7 @@ function printOrderItem(printer, item) {
     item.changes.forEach((chg) => {
       printer.leftRight(
         `   + Change: ${chg.from.toUpperCase()} -->> ${chg.to.toUpperCase()}`,
-        chg.price > 0 ? `+$${chg.price.toFixed(2)}` : ""
+        chg.price > 0 ? `$${chg.price.toFixed(2)}` : ""
       );
       printer.newLine();
     });
@@ -545,10 +551,7 @@ function printTotals(printer, order) {
   printer.println("--------------------------------");
   printer.alignRight();
 
-  const subtotal = order.total || 0;
-  const pst = subtotal * CONFIG.TAX.PST_RATE;
-  const gst = subtotal * CONFIG.TAX.GST_RATE;
-  const grandTotal = subtotal + pst + gst;
+  const { subtotal, pst, gst, grandTotal } = getOrderTotals(order);
 
   printer.bold(false);
   printer.println(`Subtotal: $${subtotal.toFixed(2)}`);
@@ -618,17 +621,15 @@ function printTogoTicket(printer, order, togoItems) {
   printer.alignLeft();
   togoItems.forEach((item) => printOrderItem(printer, item));
 
-  // Print totals (only for to-go items)
+  // Print totals (from order.taxBreakDown or calculated for to-go items)
   printer.println("--------------------------------");
   printer.alignRight();
 
   const togoSubtotal = calculateTogoTotal(togoItems);
-  const pst = togoSubtotal * CONFIG.TAX.PST_RATE;
-  const gst = togoSubtotal * CONFIG.TAX.GST_RATE;
-  const grandTotal = togoSubtotal + pst + gst;
+  const { subtotal, pst, gst, grandTotal } = getOrderTotals(order, togoSubtotal);
 
   printer.bold(false);
-  printer.println(`Subtotal: $${togoSubtotal.toFixed(2)}`);
+  printer.println(`Subtotal: $${subtotal.toFixed(2)}`);
   printer.println(`PST (6%): $${pst.toFixed(2)}`);
   printer.println(`GST (5%): $${gst.toFixed(2)}`);
   printer.println(`----------------------------`);
