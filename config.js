@@ -8,7 +8,9 @@ const CONFIG = {
   AUTH_TOKEN: "Asianlerestaurant7799",
   PRINTER: {
     type: PrinterTypes.EPSON,
-    interface: "/dev/usb/lp0",
+    // Linux: use direct interface path (e.g., "/dev/usb/lp0")
+    // Windows: will use "buffer" interface for USB printing
+    interface: process.platform === "win32" ? "buffer" : "/dev/usb/lp0",
     width: 48,
     characterSet: CharacterSet.PC852_LATIN2,
     removeSpecialCharacters: false,

@@ -11,10 +11,13 @@
     "license": "ISC",
     "type": "commonjs",
     "dependencies": {
+        "escpos": "^3.0.0-alpha.6",
+        "escpos-usb": "^3.0.0-alpha.4",
         "express": "^5.1.0",
         "firebase-admin": "^13.4.0",
         "node-thermal-printer": "^4.5.0",
         "nodemon": "^3.1.10",
-        "serialport": "^13.0.0"
+        "serialport": "^13.0.0",
+        "usb": "^1.9.2"
     }
 }
