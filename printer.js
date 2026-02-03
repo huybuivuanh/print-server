@@ -137,6 +137,7 @@ function printOrderTypeHeader(printer, order, kitchen) {
     printer.newLine();
   } else if (order.tableNumber) {
     printer.println(`Table: ${order.tableNumber}`);
+    printer.newLine();
   }
 }
 
@@ -165,6 +166,7 @@ function printPreorderInfo(printer, order, kitchen) {
         hour12: true,
       })
     );
+    printer.newLine();
   } else {
     printer.newLine();
     printer.newLine();
@@ -211,10 +213,10 @@ function printOrderDetails(printer, order) {
 
   if (order.orderType === CONFIG.ORDER_TYPES.TAKE_OUT) {
     if (order.name) {
-      printer.println(`Customer: ${order.name}`);
+      printer.println(`Name: ${order.name.toUpperCase()}`);
     }
     if (order.phoneNumber) {
-      printer.println(`Phone: ${formatPhone(order.phoneNumber)}`);
+      printer.println(`Phone #: ${formatPhone(order.phoneNumber)}`);
     }
   }
 
@@ -229,7 +231,6 @@ function printOrderItem(printer, item) {
   printer.bold(true);
   printer.setTextQuadArea();
   printer.println(item.displayName);
-  printer.newLine();
   printer.setTextNormal();
   printer.bold(true);
 
@@ -238,7 +239,6 @@ function printOrderItem(printer, item) {
       const optName = opt.quantity > 1 ? `${opt.quantity}x ${opt.name}` : opt.name;
       const optPrice = opt.price > 0 ? `${opt.quantity}x ${opt.price.toFixed(2)}` : "";
       printer.leftRight(`   • ${optName}`, optPrice);
-      printer.newLine();
     });
   }
 
@@ -328,44 +328,6 @@ function printFooter(printer, order, kitchen) {
     printer.println(`Table: ${order.tableNumber}`);
   }
 
-  printer.newLine();
-}
-
-function printTogoTicket(printer, order, togoItems) {
-  printer.alignCenter();
-  printer.setTextQuadArea();
-  printer.bold(true);
-  printer.println(CONFIG.RESTAURANT.name);
-  printer.newLine();
-
-  if (order.tableNumber) {
-    printer.setTextSize(2, 2);
-    printer.bold(false);
-    printer.println(`TO GO: ${order.tableNumber}`);
-    printer.newLine();
-  }
-
-  printer.setTextNormal();
-  printer.println("--------------------------------");
-
-  printer.alignLeft();
-  togoItems.forEach((item) => printOrderItem(printer, item));
-
-  printer.println("--------------------------------");
-  printer.alignRight();
-
-  const togoSubtotal = calculateTogoTotal(togoItems);
-  const { subtotal, pst, gst, grandTotal } = getOrderTotals(order, togoSubtotal);
-
-  printer.bold(false);
-  printer.println(`Subtotal: $${subtotal.toFixed(2)}`);
-  printer.println(`PST (6%): $${pst.toFixed(2)}`);
-  printer.println(`GST (5%): $${gst.toFixed(2)}`);
-  printer.println(`----------------------------`);
-  printer.setTextQuadArea();
-  printer.println(`TOTAL: $${grandTotal.toFixed(2)}`);
-  printer.setTextNormal();
-  printer.newLine();
   printer.newLine();
 }
 
