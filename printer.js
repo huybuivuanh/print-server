@@ -231,6 +231,7 @@ function printOrderItem(printer, item) {
   printer.bold(true);
   printer.setTextQuadArea();
   printer.println(item.displayName);
+  printer.newLine();
   printer.setTextNormal();
   printer.bold(true);
 
@@ -239,6 +240,7 @@ function printOrderItem(printer, item) {
       const optName = opt.quantity > 1 ? `${opt.quantity}x ${opt.name}` : opt.name;
       const optPrice = opt.price > 0 ? `${opt.quantity}x ${opt.price.toFixed(2)}` : "";
       printer.leftRight(`   • ${optName}`, optPrice);
+      printer.newLine();
     });
   }
 
