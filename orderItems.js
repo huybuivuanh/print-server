@@ -1,86 +1,48 @@
 const { CONFIG } = require("./config");
 
-const DINE_IN_LANE_ORDER = [
-  CONFIG.KITCHEN_TYPES.A,
-  CONFIG.KITCHEN_TYPES.Z,
-  CONFIG.KITCHEN_TYPES.B,
-  CONFIG.KITCHEN_TYPES.C,
-];
-
-/**
- * Lane letter(s) for Firestore kitchenType (or legacy A/B/C/Z).
- * @param {object} item
- * @returns {string[]}
- */
-function kitchenLanesForItem(item) {
+/** Firestore MenuItem.kitchenType (Deep Fry, Stir Fry, Both, Other, Drink). */
+function normalizedKitchenType(item) {
   const kt = item.kitchenType;
-  if (kt == null || kt === "") return [];
+  if (kt == null || kt === "") return null;
+  return kt;
+}
 
-  const mapped = CONFIG.KITCHEN_TYPE_MAP[kt];
-  if (mapped === "BOTH") {
-    return [CONFIG.KITCHEN_TYPES.A, CONFIG.KITCHEN_TYPES.B];
-  }
-  if (mapped) return [mapped];
+function isMainLineItem(item) {
+  return !item.appetizer && !item.togo;
+}
 
-  if (
-    kt === CONFIG.KITCHEN_TYPES.A ||
-    kt === CONFIG.KITCHEN_TYPES.B ||
-    kt === CONFIG.KITCHEN_TYPES.C ||
-    kt === CONFIG.KITCHEN_TYPES.Z
-  ) {
-    return [kt];
-  }
-
-  return [];
+function itemsMatchingStation(items, station) {
+  return items.filter(
+    (item) => isMainLineItem(item) && normalizedKitchenType(item) === station,
+  );
 }
 
 /**
- * @param {object[]} items
- * @param {{ kitchenPass?: string | null }} [options] — take-out: "A"|"B" filters lines; null = dine-in
+ * Groups preprocessed items: appetizers, then kitchen types in KITCHEN_SECTION_ORDER, then to-go.
+ * Same grouping for dine-in and take-out (take-out is printed twice with different A/B labels only).
  */
-function groupItemsByKitchen(items, options = {}) {
-  const kitchenPass =
-    options.kitchenPass === "" ? null : options.kitchenPass ?? null;
-
+function groupItemsByKitchen(items) {
   const appetizers = items.filter((i) => i.appetizer);
   const togoItems = items.filter((i) => i.togo && !i.appetizer);
 
-  const filterByLane = (lane) => (item) =>
-    kitchenLanesForItem(item).includes(lane) &&
-    !item.appetizer &&
-    !item.togo;
-
-  if (kitchenPass == null) {
-    const sections = [
-      { label: "Appetizers", items: appetizers },
-      ...DINE_IN_LANE_ORDER.map((lane) => ({
-        label: `Kitchen ${lane}`,
-        items: items.filter(filterByLane(lane)),
-      })),
-      { label: "Togo Items", items: togoItems },
-    ];
-    return sections.filter((s) => s.items.length > 0);
-  }
-
-  const laneItems = items.filter(
-    (item) =>
-      !item.appetizer &&
-      !item.togo &&
-      kitchenLanesForItem(item).includes(kitchenPass),
-  );
-
   const sections = [];
+
   if (appetizers.length > 0) {
     sections.push({ label: "Appetizers", items: appetizers });
   }
-  if (laneItems.length > 0) {
-    sections.push({ label: `Kitchen ${kitchenPass}`, items: laneItems });
+
+  for (const station of CONFIG.KITCHEN_SECTION_ORDER) {
+    const stationItems = itemsMatchingStation(items, station);
+    if (stationItems.length > 0) {
+      sections.push({ label: station, items: stationItems });
+    }
   }
+
   if (togoItems.length > 0) {
     sections.push({ label: "Togo Items", items: togoItems });
   }
 
-  return sections.filter((s) => s.items.length > 0);
+  return sections;
 }
 
 function preprocessOrderItem(item) {
@@ -149,9 +111,6 @@ function preprocessOrderItems(orderItems) {
   return orderItems.map(preprocessOrderItem);
 }
 
-/**
- * Firestore taxBreakDown: { subTotal, total, pst, gst, discount? }
- */
 function getOrderTotals(order, fallbackSubtotal) {
   const tb = order.taxBreakDown || order.taxbreakdown;
   if (tb && typeof tb === "object") {
@@ -204,8 +163,7 @@ function calculateTogoTotal(togoItems) {
 
     if (item.options?.length > 0) {
       itemTotal += item.options.reduce(
-        (optTotal, opt) =>
-          optTotal + (opt.price || 0) * (opt.quantity || 1),
+        (optTotal, opt) => optTotal + (opt.price || 0) * (opt.quantity || 1),
         0,
       );
     }
@@ -231,7 +189,7 @@ function calculateTogoTotal(togoItems) {
 module.exports = {
   preprocessOrderItem,
   preprocessOrderItems,
-  kitchenLanesForItem,
+  normalizedKitchenType,
   groupItemsByKitchen,
   getOrderTotals,
   calculateTogoTotal,

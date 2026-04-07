@@ -8,8 +8,6 @@ const CONFIG = {
   AUTH_TOKEN: "Asianlerestaurant7799",
   PRINTER: {
     type: PrinterTypes.EPSON,
-    // Linux: use direct interface path (e.g., "/dev/usb/lp0")
-    // Windows: will use "buffer" interface for USB printing
     interface: process.platform === "win32" ? "buffer" : "/dev/usb/lp0",
     width: 48,
     characterSet: CharacterSet.PC852_LATIN2,
@@ -33,26 +31,20 @@ const CONFIG = {
   FIRESTORE: {
     RETRY_DELAY: 5000,
   },
-  /** Take-out: print order (B slip, then A slip). */
-  TAKEOUT_PRINT_LANES: ["B", "A"],
-  KITCHEN_TYPES: {
-    A: "A",
-    B: "B",
-    C: "C",
-    Z: "Z",
-  },
   ORDER_TYPES: {
     DINE_IN: "Dine In",
     TAKE_OUT: "Take Out",
   },
-  /** Firestore KitchenType → lane letter(s); Both prints on A and B tickets. */
-  KITCHEN_TYPE_MAP: {
-    "Stir Fry": "A",
-    "Deep Fry": "B",
-    Drink: "C",
-    Other: "Z",
-    Both: "BOTH",
-  },
+  /**
+   * Take-out: print the same ticket twice, in this order (B then A).
+   * Only changes the slip label (*Take Out B* / *Take Out A*); line items are identical.
+   */
+  TAKEOUT_PRINT_LANES: ["B", "A"],
+  /**
+   * Section order after appetizers, before to-go.
+   * Matches Firestore MenuItem.kitchenType strings.
+   */
+  KITCHEN_SECTION_ORDER: ["Deep Fry", "Both", "Stir Fry", "Other", "Drink"],
   OPTION_NAMES: {
     EGG_ROLL: "Egg Roll",
     SPRING_ROLL: "Spring Roll",

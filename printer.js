@@ -30,7 +30,10 @@ function takeOutCustomerName(order) {
 }
 
 function scheduledPickupDate(order) {
-  if (order.fulfillment?.kind === "scheduled" && order.fulfillment.scheduledAt) {
+  if (
+    order.fulfillment?.kind === "scheduled" &&
+    order.fulfillment.scheduledAt
+  ) {
     return toDateMaybe(order.fulfillment.scheduledAt);
   }
   if (order.preorderTime) return toDateMaybe(order.preorderTime);
@@ -183,7 +186,10 @@ function printOrderTypeHeader(printer, order, kitchen) {
   printer.setTextSize(2, 2);
   printer.bold(false);
 
-  if (order.orderType === CONFIG.ORDER_TYPES.TAKE_OUT && !isScheduledTakeOut(order)) {
+  if (
+    order.orderType === CONFIG.ORDER_TYPES.TAKE_OUT &&
+    !isScheduledTakeOut(order)
+  ) {
     printer.println(`*Take Out ${kitchen}*`);
     printer.newLine();
   } else if (order.tableNumber) {
@@ -215,7 +221,6 @@ function printPreorderInfo(printer, order, kitchen) {
         hour12: true,
       }),
     );
-    printer.newLine();
   } else {
     printer.newLine();
     printer.newLine();
@@ -384,8 +389,11 @@ function printFooter(printer, order, kitchen) {
   printer.bold(false);
 
   if (order.orderType === CONFIG.ORDER_TYPES.TAKE_OUT) {
-    const label = isScheduledTakeOut(order) ? "Pre-Order" : "Take Out";
-    printer.println(`*${label} ${kitchen}*`);
+    if (!isScheduledTakeOut(order)) {
+      printer.println(`*Take Out ${kitchen}*`);
+    } else {
+      printPreorderInfo(printer, order, kitchen);
+    }
   } else if (order.tableNumber) {
     printer.println(`Table: ${order.tableNumber}`);
   }
@@ -398,13 +406,7 @@ async function printOrder(order, kitchen) {
 
   try {
     const processedItems = preprocessOrderItems(order.orderItems);
-    const kitchenPass =
-      order.orderType === CONFIG.ORDER_TYPES.TAKE_OUT && kitchen
-        ? kitchen
-        : null;
-    const groupedSections = groupItemsByKitchen(processedItems, {
-      kitchenPass,
-    });
+    const groupedSections = groupItemsByKitchen(processedItems);
 
     printRestaurantHeader(printer, order);
     printOrderTypeHeader(printer, order, kitchen);
