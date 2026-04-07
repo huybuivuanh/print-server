@@ -69,19 +69,18 @@ function preprocessOrderItem(item) {
     }
   }
 
-  const eggSpringOption = processed.options.find(
-    (opt) =>
-      (opt.name === CONFIG.OPTION_NAMES.EGG_ROLL ||
-        opt.name === CONFIG.OPTION_NAMES.SPRING_ROLL) &&
-      (!opt.quantity || opt.quantity <= 1),
+  const eggOption = processed.options.find(
+    (opt) => opt.name === CONFIG.OPTION_NAMES.EGG_ROLL,
   );
 
-  if (eggSpringOption) {
-    const abbreviation =
-      eggSpringOption.name === CONFIG.OPTION_NAMES.EGG_ROLL ? "ER" : "SP";
-    processed.name = `${processed.name}/${abbreviation}`;
+  const springOption = processed.options.find(
+    (opt) => opt.name === CONFIG.OPTION_NAMES.SPRING_ROLL,
+  );
+
+  if ((eggOption || springOption) && !(eggOption && springOption)) {
+    processed.name = `${processed.name}/${eggOption ? "ER" : "SP"}`;
     processed.options = processed.options.filter(
-      (opt) => opt !== eggSpringOption,
+      (opt) => opt !== eggOption && opt !== springOption,
     );
   }
 
@@ -94,7 +93,9 @@ function preprocessOrderItem(item) {
   if (riceNoodleOption) {
     const abbreviation =
       riceNoodleOption.name === CONFIG.OPTION_NAMES.RICE ? "Rice" : "ND";
-    processed.name = `${processed.name}/${abbreviation}`;
+    processed.name.includes("Hot Plate")
+      ? (processed.name = `${processed.name}/${abbreviation}`)
+      : (processed.name = `${processed.name} ${abbreviation}`);
     processed.options = processed.options.filter(
       (opt) => opt !== riceNoodleOption,
     );
