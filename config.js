@@ -33,6 +33,8 @@ const CONFIG = {
   FIRESTORE: {
     RETRY_DELAY: 5000,
   },
+  /** Take-out: print order (B slip, then A slip). */
+  TAKEOUT_PRINT_LANES: ["B", "A"],
   KITCHEN_TYPES: {
     A: "A",
     B: "B",
@@ -42,6 +44,14 @@ const CONFIG = {
   ORDER_TYPES: {
     DINE_IN: "Dine In",
     TAKE_OUT: "Take Out",
+  },
+  /** Firestore KitchenType → lane letter(s); Both prints on A and B tickets. */
+  KITCHEN_TYPE_MAP: {
+    "Stir Fry": "A",
+    "Deep Fry": "B",
+    Drink: "C",
+    Other: "Z",
+    Both: "BOTH",
   },
   OPTION_NAMES: {
     EGG_ROLL: "Egg Roll",

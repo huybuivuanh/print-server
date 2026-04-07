@@ -32,9 +32,8 @@ async function processQueue() {
     console.log("Printing order:", order.id);
 
     if (order.orderType === CONFIG.ORDER_TYPES.TAKE_OUT) {
-      const kitchens = [CONFIG.KITCHEN_TYPES.B, CONFIG.KITCHEN_TYPES.A];
-      for (const kitchen of kitchens) {
-        await printOrder(order, kitchen);
+      for (const lane of CONFIG.TAKEOUT_PRINT_LANES) {
+        await printOrder(order, lane);
       }
     } else {
       await printOrder(order, "");
@@ -59,13 +58,13 @@ async function processQueue() {
         console.log(`✅ Marked order ${order.id} as printed in Firestore`);
       } else {
         console.log(
-          `⚠️ Order ${order.id} not found in ${collectionName} (may be from order history)`
+          `⚠️ Order ${order.id} not found in ${collectionName} (may be from order history)`,
         );
       }
     } catch (updateError) {
       console.error(
         `Error updating Firestore for order ${order.id}:`,
-        updateError.message || updateError
+        updateError.message || updateError,
       );
     }
   } catch (error) {
@@ -77,13 +76,13 @@ async function processQueue() {
         console.log(
           printSucceeded
             ? `✅ Removed order ${order.id} from print queue (printed successfully)`
-            : `⚠️ Removed order ${order.id} from print queue (print failed)`
+            : `⚠️ Removed order ${order.id} from print queue (print failed)`,
         );
       }
     } catch (deleteError) {
       console.error(
         "Error deleting from print queue:",
-        deleteError.message || deleteError
+        deleteError.message || deleteError,
       );
     }
 
@@ -94,7 +93,7 @@ async function processQueue() {
 
 // ========== FIRESTORE LISTENER ==========
 function startSnapshotListenerWithRetry(
-  retryDelay = CONFIG.FIRESTORE.RETRY_DELAY
+  retryDelay = CONFIG.FIRESTORE.RETRY_DELAY,
 ) {
   async function connect() {
     try {
@@ -112,6 +111,7 @@ function startSnapshotListenerWithRetry(
             order.printId = change.doc.id;
 
             if (order) {
+              console.log(order);
               console.log("New order detected:", order.id || order.printId);
               printQueue.push(order);
               processQueue();
@@ -122,7 +122,7 @@ function startSnapshotListenerWithRetry(
           console.error("Firestore listener error:", error.message);
           console.log(`Retrying in ${retryDelay / 1000}s...`);
           setTimeout(connect, retryDelay);
-        }
+        },
       );
 
       console.log("✅ Firestore listener connected!");
@@ -139,7 +139,7 @@ function startSnapshotListenerWithRetry(
 // ========== SERVER STARTUP ==========
 app.listen(CONFIG.SERVER.port, CONFIG.SERVER.host, () => {
   console.log(
-    `🖨️  Print server running on ${CONFIG.SERVER.host}:${CONFIG.SERVER.port}`
+    `🖨️  Print server running on ${CONFIG.SERVER.host}:${CONFIG.SERVER.port}`,
   );
   startSnapshotListenerWithRetry();
 });

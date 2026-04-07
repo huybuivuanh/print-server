@@ -16,12 +16,25 @@ function formatPhone(phone) {
 function toDateMaybe(ts) {
   if (!ts) return null;
 
+  if (ts instanceof Date) return ts;
+
+  if (typeof ts === "string") {
+    const d = new Date(ts);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
   if (typeof ts.toDate === "function") {
     return ts.toDate();
   }
 
   if (typeof ts.seconds === "number") {
-    return new Date(ts.seconds * 1000 + Math.floor(ts.nanoseconds / 1e6));
+    const ns = typeof ts.nanoseconds === "number" ? ts.nanoseconds : 0;
+    return new Date(ts.seconds * 1000 + Math.floor(ns / 1e6));
+  }
+
+  if (typeof ts._seconds === "number") {
+    const ns = typeof ts._nanoseconds === "number" ? ts._nanoseconds : 0;
+    return new Date(ts._seconds * 1000 + Math.floor(ns / 1e6));
   }
 
   return null;

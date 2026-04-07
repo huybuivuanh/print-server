@@ -1,12 +1,52 @@
-const { ThermalPrinter, PrinterTypes, CharacterSet, BreakLine } = require("node-thermal-printer");
+const {
+  ThermalPrinter,
+  PrinterTypes,
+  CharacterSet,
+  BreakLine,
+} = require("node-thermal-printer");
 const { CONFIG } = require("./config");
 const { formatPhone, toDateMaybe, formatDate } = require("./utils");
 const {
   preprocessOrderItems,
   groupItemsByKitchen,
   getOrderTotals,
-  calculateTogoTotal,
 } = require("./orderItems");
+
+function isScheduledTakeOut(order) {
+  if (order.fulfillment?.kind === "scheduled") return true;
+  return Boolean(order.isPreorder);
+}
+
+function staffDisplay(order) {
+  if (typeof order.staff === "string" && order.staff.trim()) {
+    return order.staff.trim();
+  }
+  if (order.staff?.name) return order.staff.name;
+  return "";
+}
+
+function takeOutCustomerName(order) {
+  return order.customerName ?? order.name ?? "";
+}
+
+function scheduledPickupDate(order) {
+  if (order.fulfillment?.kind === "scheduled" && order.fulfillment.scheduledAt) {
+    return toDateMaybe(order.fulfillment.scheduledAt);
+  }
+  if (order.preorderTime) return toDateMaybe(order.preorderTime);
+  return null;
+}
+
+function immediateReadyMinutes(order) {
+  if (
+    order.fulfillment?.kind === "immediate" &&
+    order.fulfillment.readyTimeMinutes != null
+  ) {
+    return order.fulfillment.readyTimeMinutes;
+  }
+  if (order.readyTime != null) return order.readyTime;
+  return null;
+}
 
 // Platform detection
 const IS_WINDOWS = process.platform === "win32";
@@ -21,65 +61,76 @@ if (IS_WINDOWS) {
 }
 
 // Fallback VID and PID (if auto-detection fails) - Windows only
-const FALLBACK_VID = 0x0483;  // Vendor ID
-const FALLBACK_PID = 0x5743;  // Product ID
+const FALLBACK_VID = 0x0483; // Vendor ID
+const FALLBACK_PID = 0x5743; // Product ID
 
 // Function to detect USB printer (Windows only)
 function detectUSBPrinter() {
   if (!IS_WINDOWS) {
     throw new Error("USB printer detection is only available on Windows");
   }
-  
+
   try {
     const printers = escpos.USB.findPrinter();
-    
+
     if (!printers || printers.length === 0) {
-      console.log('No USB printers found with auto-detection.');
-      console.log('Using fallback VID/PID...\n');
+      console.log("No USB printers found with auto-detection.");
+      console.log("Using fallback VID/PID...\n");
       return { vid: FALLBACK_VID, pid: FALLBACK_PID };
     }
-    
+
     console.log(`Found ${printers.length} USB printer(s):\n`);
-    
+
     // Extract VID/PID from each printer
-    const printerInfo = printers.map((printer, index) => {
-      // VID/PID can be in deviceDescriptor
-      const vid = printer.deviceDescriptor?.idVendor || printer.idVendor || printer.vendorId || printer.vid;
-      const pid = printer.deviceDescriptor?.idProduct || printer.idProduct || printer.productId || printer.pid;
-      
-      if (vid && pid) {
-        return {
-          index: index + 1,
-          vid: vid,
-          pid: pid,
-          vidHex: `0x${vid.toString(16).toUpperCase().padStart(4, '0')}`,
-          pidHex: `0x${pid.toString(16).toUpperCase().padStart(4, '0')}`
-        };
-      }
-      return null;
-    }).filter(p => p !== null);
-    
+    const printerInfo = printers
+      .map((printer, index) => {
+        // VID/PID can be in deviceDescriptor
+        const vid =
+          printer.deviceDescriptor?.idVendor ||
+          printer.idVendor ||
+          printer.vendorId ||
+          printer.vid;
+        const pid =
+          printer.deviceDescriptor?.idProduct ||
+          printer.idProduct ||
+          printer.productId ||
+          printer.pid;
+
+        if (vid && pid) {
+          return {
+            index: index + 1,
+            vid: vid,
+            pid: pid,
+            vidHex: `0x${vid.toString(16).toUpperCase().padStart(4, "0")}`,
+            pidHex: `0x${pid.toString(16).toUpperCase().padStart(4, "0")}`,
+          };
+        }
+        return null;
+      })
+      .filter((p) => p !== null);
+
     if (printerInfo.length === 0) {
-      console.log('Could not extract VID/PID from found printers.');
-      console.log('Using fallback VID/PID...\n');
+      console.log("Could not extract VID/PID from found printers.");
+      console.log("Using fallback VID/PID...\n");
       return { vid: FALLBACK_VID, pid: FALLBACK_PID };
     }
-    
+
     // Display all found printers
-    printerInfo.forEach(p => {
+    printerInfo.forEach((p) => {
       console.log(`  ${p.index}. VID: ${p.vidHex}, PID: ${p.pidHex}`);
     });
-    console.log('');
-    
+    console.log("");
+
     // Use the first found printer
     const selected = printerInfo[0];
-    console.log(`Using printer ${selected.index}: VID: ${selected.vidHex}, PID: ${selected.pidHex}\n`);
-    
+    console.log(
+      `Using printer ${selected.index}: VID: ${selected.vidHex}, PID: ${selected.pidHex}\n`,
+    );
+
     return { vid: selected.vid, pid: selected.pid };
-    
   } catch (error) {
-    console.log('Error during auto-detection:', error.message);
-    console.log('Using fallback VID/PID...\n');
+    console.log("Error during auto-detection:", error.message);
+    console.log("Using fallback VID/PID...\n");
     return { vid: FALLBACK_VID, pid: FALLBACK_PID };
   }
 }
@@ -92,15 +143,15 @@ function createPrinter() {
     interface: CONFIG.PRINTER.interface,
     characterSet: CharacterSet.PC852_LATIN2,
     removeSpecialCharacters: false,
-    lineCharacter: '-',
+    lineCharacter: "-",
     breakLine: BreakLine.WORD,
   };
-  
+
   // On Linux, add width if using direct interface
   if (IS_LINUX && CONFIG.PRINTER.interface !== "buffer") {
     printerConfig.width = CONFIG.PRINTER.width;
   }
-  
+
   return new ThermalPrinter(printerConfig);
 }
 
@@ -132,7 +183,7 @@ function printOrderTypeHeader(printer, order, kitchen) {
   printer.setTextSize(2, 2);
   printer.bold(false);
 
-  if (order.orderType === CONFIG.ORDER_TYPES.TAKE_OUT && !order.isPreorder) {
+  if (order.orderType === CONFIG.ORDER_TYPES.TAKE_OUT && !isScheduledTakeOut(order)) {
     printer.println(`*Take Out ${kitchen}*`);
     printer.newLine();
   } else if (order.tableNumber) {
@@ -142,21 +193,19 @@ function printOrderTypeHeader(printer, order, kitchen) {
 }
 
 function printPreorderInfo(printer, order, kitchen) {
-  if (!order.isPreorder) return;
+  if (!isScheduledTakeOut(order)) return;
 
   printer.setTextQuadArea();
   printer.println(`***Pre-Order ${kitchen}***`);
 
-  const preorderDate = order.preorderTime
-    ? toDateMaybe(order.preorderTime)
-    : null;
+  const preorderDate = scheduledPickupDate(order);
   if (preorderDate) {
     printer.println(
       formatDate(preorderDate, {
         year: "numeric",
         month: "short",
         day: "numeric",
-      })
+      }),
     );
     printer.println(
       formatDate(preorderDate, {
@@ -164,7 +213,7 @@ function printPreorderInfo(printer, order, kitchen) {
         hour: "2-digit",
         minute: "2-digit",
         hour12: true,
-      })
+      }),
     );
     printer.newLine();
   } else {
@@ -179,8 +228,9 @@ function printOrderDetails(printer, order) {
   printer.setTextNormal();
   printer.alignLeft();
 
-  if (order.staff?.name) {
-    printer.println(`Staff: ${order.staff.name}`);
+  const staff = staffDisplay(order);
+  if (staff) {
+    printer.println(`Staff: ${staff}`);
   }
 
   if (order.orderType === CONFIG.ORDER_TYPES.DINE_IN && order.guests) {
@@ -197,23 +247,27 @@ function printOrderDetails(printer, order) {
       minute: "2-digit",
       hour12: true,
     });
-    printer.println(`Ordered At: ${timeString}`);
+    if (timeString) {
+      printer.println(`Ordered At: ${timeString}`);
+    }
   }
 
+  const readyMins = immediateReadyMinutes(order);
   if (
-    !order.isPreorder &&
-    order.readyTime &&
-    order.orderType !== CONFIG.ORDER_TYPES.DINE_IN
+    order.orderType === CONFIG.ORDER_TYPES.TAKE_OUT &&
+    !isScheduledTakeOut(order) &&
+    readyMins != null
   ) {
-    printer.println(`Ready in: ${order.readyTime} mins`);
+    printer.println(`Ready in: ${readyMins} mins`);
   }
 
   printer.setTextQuadArea();
   printer.bold(false);
 
   if (order.orderType === CONFIG.ORDER_TYPES.TAKE_OUT) {
-    if (order.name) {
-      printer.println(`Name: ${order.name.toUpperCase()}`);
+    const custName = takeOutCustomerName(order);
+    if (custName) {
+      printer.println(`Name: ${custName.toUpperCase()}`);
     }
     if (order.phoneNumber) {
       printer.println(`Phone #: ${formatPhone(order.phoneNumber)}`);
@@ -237,8 +291,10 @@ function printOrderItem(printer, item) {
 
   if (item.options?.length > 0) {
     item.options.forEach((opt) => {
-      const optName = opt.quantity > 1 ? `${opt.quantity}x ${opt.name}` : opt.name;
-      const optPrice = opt.price > 0 ? `${opt.quantity}x ${opt.price.toFixed(2)}` : "";
+      const optName =
+        opt.quantity > 1 ? `${opt.quantity}x ${opt.name}` : opt.name;
+      const optPrice =
+        opt.price > 0 ? `${opt.quantity}x ${opt.price.toFixed(2)}` : "";
       printer.leftRight(`   • ${optName}`, optPrice);
       printer.newLine();
     });
@@ -248,7 +304,7 @@ function printOrderItem(printer, item) {
     item.extras.forEach((extra) => {
       printer.leftRight(
         `   + Add Extra: ${extra.description.toUpperCase()}`,
-        extra.price > 0 ? `$${extra.price.toFixed(2)}` : ""
+        extra.price > 0 ? `$${extra.price.toFixed(2)}` : "",
       );
       printer.newLine();
     });
@@ -258,7 +314,7 @@ function printOrderItem(printer, item) {
     item.changes.forEach((chg) => {
       printer.leftRight(
         `   + Change: ${chg.from.toUpperCase()} -->> ${chg.to.toUpperCase()}`,
-        chg.price > 0 ? `$${chg.price.toFixed(2)}` : ""
+        chg.price > 0 ? `$${chg.price.toFixed(2)}` : "",
       );
       printer.newLine();
     });
@@ -298,10 +354,14 @@ function printTotals(printer, order) {
   printer.println("--------------------------------");
   printer.alignRight();
 
-  const { subtotal, pst, gst, grandTotal } = getOrderTotals(order);
+  const { subtotal, pst, gst, grandTotal, discountAmount } =
+    getOrderTotals(order);
 
   printer.bold(false);
   printer.println(`Subtotal: $${subtotal.toFixed(2)}`);
+  if (discountAmount > 0) {
+    printer.println(`Discount: -$${discountAmount.toFixed(2)}`);
+  }
   printer.println(`PST (6%): $${pst.toFixed(2)}`);
   printer.println(`GST (5%): $${gst.toFixed(2)}`);
   printer.println(`----------------------------`);
@@ -324,7 +384,7 @@ function printFooter(printer, order, kitchen) {
   printer.bold(false);
 
   if (order.orderType === CONFIG.ORDER_TYPES.TAKE_OUT) {
-    const label = order.isPreorder ? "Pre-Order" : "Take Out";
+    const label = isScheduledTakeOut(order) ? "Pre-Order" : "Take Out";
     printer.println(`*${label} ${kitchen}*`);
   } else if (order.tableNumber) {
     printer.println(`Table: ${order.tableNumber}`);
@@ -338,7 +398,13 @@ async function printOrder(order, kitchen) {
 
   try {
     const processedItems = preprocessOrderItems(order.orderItems);
-    const groupedSections = groupItemsByKitchen(processedItems);
+    const kitchenPass =
+      order.orderType === CONFIG.ORDER_TYPES.TAKE_OUT && kitchen
+        ? kitchen
+        : null;
+    const groupedSections = groupItemsByKitchen(processedItems, {
+      kitchenPass,
+    });
 
     printRestaurantHeader(printer, order);
     printOrderTypeHeader(printer, order, kitchen);
@@ -349,7 +415,7 @@ async function printOrder(order, kitchen) {
     printFooter(printer, order, kitchen);
 
     printer.cut();
-    
+
     // Platform-specific printing
     if (IS_WINDOWS) {
       // Windows: Use USB printing via escpos-usb
@@ -368,38 +434,38 @@ async function printOrder(order, kitchen) {
 async function printViaUSB(printer) {
   // Get the buffer instead of executing directly
   const buffer = await printer.getBuffer();
-  
+
   // Auto-detect printer VID/PID
   const { vid: VID, pid: PID } = detectUSBPrinter();
-  
+
   // Send buffer to USB printer using escpos-usb
   return new Promise((resolve, reject) => {
     const usbDevice = new escpos.USB(VID, PID);
-    
-    usbDevice.open(function(error) {
+
+    usbDevice.open(function (error) {
       if (error) {
-        console.error('Failed to open USB printer:', error);
-        console.error('\nTroubleshooting:');
-        console.error('1. Make sure printer is connected via USB');
-        console.error('2. Run as Administrator');
-        console.error('3. Verify WinUSB driver is installed (use Zadig)');
+        console.error("Failed to open USB printer:", error);
+        console.error("\nTroubleshooting:");
+        console.error("1. Make sure printer is connected via USB");
+        console.error("2. Run as Administrator");
+        console.error("3. Verify WinUSB driver is installed (use Zadig)");
         reject(error);
         return;
       }
-      
-      console.log('✓ USB printer connected!');
-      console.log('Sending print data...\n');
-      
+
+      console.log("✓ USB printer connected!");
+      console.log("Sending print data...\n");
+
       // Write buffer to USB device
-      usbDevice.write(buffer, function(err) {
+      usbDevice.write(buffer, function (err) {
         if (err) {
-          console.error('Error writing to printer:', err);
+          console.error("Error writing to printer:", err);
           usbDevice.close();
           reject(err);
           return;
         }
-        
-        console.log('✓ Print sent successfully!');
+
+        console.log("✓ Print sent successfully!");
         usbDevice.close();
         resolve();
       });
@@ -414,19 +480,23 @@ async function printViaDirectInterface(printer) {
     if (!isConnected) {
       throw new Error(`Printer not connected at ${CONFIG.PRINTER.interface}`);
     }
-    
+
     console.log(`✓ Printer connected at ${CONFIG.PRINTER.interface}`);
-    console.log('Sending print data...\n');
-    
+    console.log("Sending print data...\n");
+
     await printer.execute();
-    
-    console.log('✓ Print sent successfully!');
+
+    console.log("✓ Print sent successfully!");
   } catch (error) {
-    console.error('Failed to print via direct interface:', error);
-    console.error('\nTroubleshooting:');
-    console.error(`1. Check if printer is connected at ${CONFIG.PRINTER.interface}`);
-    console.error('2. Verify printer permissions (may need to run with sudo or add user to lp group)');
-    console.error('3. Check if printer device path is correct in config.js');
+    console.error("Failed to print via direct interface:", error);
+    console.error("\nTroubleshooting:");
+    console.error(
+      `1. Check if printer is connected at ${CONFIG.PRINTER.interface}`,
+    );
+    console.error(
+      "2. Verify printer permissions (may need to run with sudo or add user to lp group)",
+    );
+    console.error("3. Check if printer device path is correct in config.js");
     throw error;
   }
 }
