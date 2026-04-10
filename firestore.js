@@ -1,5 +1,5 @@
 const admin = require("firebase-admin");
-const serviceAccount = require("./asianlepos-firebase-adminsdk-fbsvc-97798208bf.json");
+const serviceAccount = require("./admin-sdk.json");
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),

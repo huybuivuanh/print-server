@@ -93,9 +93,7 @@ function preprocessOrderItem(item) {
   if (riceNoodleOption) {
     const abbreviation =
       riceNoodleOption.name === CONFIG.OPTION_NAMES.RICE ? "Rice" : "ND";
-    processed.name.includes("Hot Plate")
-      ? (processed.name = `${processed.name}/${abbreviation}`)
-      : (processed.name = `${processed.name} ${abbreviation}`);
+    processed.name = `${processed.name}/${abbreviation}`;
     processed.options = processed.options.filter(
       (opt) => opt !== riceNoodleOption,
     );
