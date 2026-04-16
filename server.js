@@ -26,7 +26,6 @@ async function processQueue() {
 
   isPrinting = true;
   const order = printQueue.shift();
-  let printSucceeded = false;
 
   try {
     console.log("Printing order:", order.id);
@@ -39,53 +38,43 @@ async function processQueue() {
       await printOrder(order, "");
     }
 
-    printSucceeded = true;
     console.log("✅ Print completed for order:", order.id);
 
-    try {
+    if (!order.printId) {
+      console.warn(
+        `No printId for order ${order.id}; skipping Firestore printed flags (Partial Order)`,
+      );
+    } else {
       const collectionName =
         order.orderType === CONFIG.ORDER_TYPES.DINE_IN
           ? "dineInOrders"
           : "takeOutOrders";
 
       const orderRef = db.collection(collectionName).doc(order.id);
+      const queueRef = db.collection("printQueue").doc(order.printId);
       const orderDoc = await orderRef.get();
 
+      const batch = db.batch();
       if (orderDoc.exists) {
-        await orderRef.update({
-          printed: true,
-        });
-        console.log(`✅ Marked order ${order.id} as printed in Firestore`);
+        batch.update(orderRef, { printed: true });
       } else {
         console.log(
-          `⚠️ Order ${order.id} not found in ${collectionName} (may be from order history)`,
+          `⚠️ Order ${order.id} not found in ${collectionName} (Partial Order)`,
         );
       }
-    } catch (updateError) {
-      console.error(
-        `Error updating Firestore for order ${order.id}:`,
-        updateError.message || updateError,
+      batch.update(queueRef, { printed: true });
+      await batch.commit();
+      console.log(
+        `✅ Marked print queue and order ${order.id} as printed in Firestore`,
       );
     }
   } catch (error) {
-    console.error("❌ Print failed for order:", order.id, error);
+    console.error(
+      "❌ Print or Firestore update failed for order:",
+      order.id,
+      error,
+    );
   } finally {
-    try {
-      if (order.printId) {
-        await db.collection("printQueue").doc(order.printId).delete();
-        console.log(
-          printSucceeded
-            ? `✅ Removed order ${order.id} from print queue (printed successfully)`
-            : `⚠️ Removed order ${order.id} from print queue (print failed)`,
-        );
-      }
-    } catch (deleteError) {
-      console.error(
-        "Error deleting from print queue:",
-        deleteError.message || deleteError,
-      );
-    }
-
     isPrinting = false;
     processQueue();
   }
@@ -107,15 +96,22 @@ function startSnapshotListenerWithRetry(
           }
 
           snapshot.docChanges().forEach((change) => {
+            if (change.type === "removed") return;
+
             const order = change.doc.data();
+            if (!order || order.printed === true) return;
+
             order.printId = change.doc.id;
 
-            if (order) {
-              console.log(order);
-              console.log("New order detected:", order.id || order.printId);
-              printQueue.push(order);
-              processQueue();
-            }
+            const alreadyQueued = printQueue.some(
+              (o) => o.printId === order.printId,
+            );
+            if (alreadyQueued) return;
+
+            console.log(order);
+            console.log("New order detected:", order.id || order.printId);
+            printQueue.push(order);
+            processQueue();
           });
         },
         (error) => {
