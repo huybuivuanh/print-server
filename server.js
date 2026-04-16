@@ -28,6 +28,32 @@ async function processQueue() {
   const order = printQueue.shift();
 
   try {
+    // Prefer timestamps (and any missing fields) from the canonical order doc.
+    // printQueue docs are often created "now", so their createdAt may not reflect
+    // the original order time.
+    try {
+      if (order?.id && order?.orderType) {
+        const collectionName =
+          order.orderType === CONFIG.ORDER_TYPES.DINE_IN
+            ? "dineInOrders"
+            : "takeOutOrders";
+        const orderRef = db.collection(collectionName).doc(order.id);
+        const orderDoc = await orderRef.get();
+
+        if (orderDoc.exists) {
+          const orderData = orderDoc.data();
+          // Only override if the canonical doc has these fields.
+          if (orderData?.createdAt) order.createdAt = orderData.createdAt;
+          if (orderData?.orderedAt) order.orderedAt = orderData.orderedAt;
+        }
+      }
+    } catch (enrichErr) {
+      console.warn(
+        "⚠️ Failed to enrich order timestamp from Firestore:",
+        enrichErr?.message || enrichErr,
+      );
+    }
+
     console.log("Printing order:", order.id);
 
     if (order.orderType === CONFIG.ORDER_TYPES.TAKE_OUT) {
@@ -108,7 +134,6 @@ function startSnapshotListenerWithRetry(
             );
             if (alreadyQueued) return;
 
-            console.log(order);
             console.log("New order detected:", order.id || order.printId);
             printQueue.push(order);
             processQueue();

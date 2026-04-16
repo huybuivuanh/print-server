@@ -179,10 +179,10 @@ function printRestaurantHeader(printer, order) {
   printer.setTextQuadArea();
   printer.bold(true);
   printer.println(CONFIG.RESTAURANT.name);
-  printer.newLine();
 }
 
 function printOrderTypeHeader(printer, order, kitchen) {
+  printer.newLine();
   printer.setTextSize(2, 2);
   printer.bold(false);
 
@@ -191,16 +191,15 @@ function printOrderTypeHeader(printer, order, kitchen) {
     !isScheduledTakeOut(order)
   ) {
     printer.println(`*Take Out ${kitchen}*`);
-    printer.newLine();
   } else if (order.tableNumber) {
     printer.println(`Table: ${order.tableNumber}`);
-    printer.newLine();
   }
 }
 
 function printPreorderInfo(printer, order, kitchen) {
   if (!isScheduledTakeOut(order)) return;
 
+  printer.newLine();
   printer.setTextQuadArea();
   printer.println(`***Pre-Order ${kitchen}***`);
 
@@ -221,15 +220,13 @@ function printPreorderInfo(printer, order, kitchen) {
         hour12: true,
       }),
     );
-  } else {
-    printer.newLine();
-    printer.newLine();
   }
 
   printer.setTextNormal();
 }
 
 function printOrderDetails(printer, order) {
+  printer.newLine();
   printer.setTextNormal();
   printer.alignLeft();
 
@@ -242,8 +239,9 @@ function printOrderDetails(printer, order) {
     printer.println(`Guests: ${order.guests.toString()}`);
   }
 
-  if (order.createdAt) {
-    const orderDate = toDateMaybe(order.createdAt);
+  const orderedAt = order.orderedAt ?? order.createdAt;
+  if (orderedAt) {
+    const orderDate = toDateMaybe(orderedAt);
     const timeString = formatDate(orderDate, {
       month: "short",
       day: "numeric",
@@ -283,45 +281,54 @@ function printOrderDetails(printer, order) {
   printer.println("--------------------------------");
 }
 
-function printOrderItem(printer, item) {
+function printOrderItem(printer, item, index) {
   const itemTotal = (item.price * item.quantity).toFixed(2);
+
+  printer.newLine();
 
   printer.alignLeft();
   printer.bold(true);
   printer.setTextQuadArea();
   printer.println(item.displayName);
-  printer.newLine();
   printer.setTextNormal();
   printer.bold(true);
 
   if (item.options?.length > 0) {
     item.options.forEach((opt) => {
+      printer.newLine();
       const optName =
         opt.quantity > 1 ? `${opt.quantity}x ${opt.name}` : opt.name;
-      const optPrice =
-        opt.price > 0 ? `${opt.quantity}x ${opt.price.toFixed(2)}` : "";
+
+      let optPrice = "";
+      if (item.kitchenType === "Drink") {
+        optPrice = `${opt.quantity} x ${opt.price.toFixed(2)}`;
+      } else {
+        if (opt.quantity > 1 && opt.price > 0) {
+          optPrice = `${opt.quantity}x ${opt.price.toFixed(2)}`;
+        }
+      }
+
       printer.leftRight(`   • ${optName}`, optPrice);
-      printer.newLine();
     });
   }
 
   if (item.extras?.length > 0) {
     item.extras.forEach((extra) => {
+      printer.newLine();
       printer.leftRight(
         `   + Add Extra: ${extra.description.toUpperCase()}`,
         extra.price > 0 ? `$${extra.price.toFixed(2)}` : "",
       );
-      printer.newLine();
     });
   }
 
   if (item.changes?.length > 0) {
     item.changes.forEach((chg) => {
+      printer.newLine();
       printer.leftRight(
         `   + Change: ${chg.from.toUpperCase()} -->> ${chg.to.toUpperCase()}`,
         chg.price > 0 ? `$${chg.price.toFixed(2)}` : "",
       );
-      printer.newLine();
     });
   }
 
@@ -344,9 +351,11 @@ function printOrderItems(printer, groupedSections) {
       printSectionHeader(printer, "Appetizers");
     }
 
-    section.items.forEach((item) => printOrderItem(printer, item));
+    section.items.forEach((item, index) =>
+      printOrderItem(printer, item, index),
+    );
 
-    if (section.label === "Appetizers") {
+    if (section.label === "Appetizers" && groupedSections.length > 1) {
       printer.setTextNormal();
       printer.alignLeft();
       printer.bold(true);
@@ -365,7 +374,18 @@ function printTotals(printer, order) {
   printer.bold(false);
   printer.println(`Subtotal: $${subtotal.toFixed(2)}`);
   if (discountAmount > 0) {
-    printer.println(`Discount: -$${discountAmount.toFixed(2)}`);
+    const discount = order.taxBreakDown?.discount;
+    const discountLabel =
+      discount?.discountType === "Amount"
+        ? `$${discount?.discountValue.toFixed(0)}`
+        : `${discount?.discountValue.toFixed(0)}%`;
+
+    printer.println(
+      `Discount (${discountLabel}): -$${discountAmount.toFixed(2)}`,
+    );
+    printer.println(
+      `Taxable Subtotal: $${discount?.taxableSubtotal?.toFixed(2)}`,
+    );
   }
   printer.println(`PST (6%): $${pst.toFixed(2)}`);
   printer.println(`GST (5%): $${gst.toFixed(2)}`);
@@ -383,18 +403,19 @@ function printFooter(printer, order, kitchen) {
   printer.println(CONFIG.RESTAURANT.address);
   printer.println(CONFIG.RESTAURANT.phone);
   printer.underline(false);
-  printer.newLine();
 
   printer.setTextSize(2, 2);
   printer.bold(false);
 
   if (order.orderType === CONFIG.ORDER_TYPES.TAKE_OUT) {
     if (!isScheduledTakeOut(order)) {
+      printer.newLine();
       printer.println(`*Take Out ${kitchen}*`);
     } else {
       printPreorderInfo(printer, order, kitchen);
     }
   } else if (order.tableNumber) {
+    printer.newLine();
     printer.println(`Table: ${order.tableNumber}`);
   }
 
