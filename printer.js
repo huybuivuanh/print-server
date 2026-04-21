@@ -168,8 +168,12 @@ function printSectionHeader(printer, title) {
   printer.newLine();
 }
 
+function isPaid(order) {
+  return order.orderItems.every((item) => item.paid);
+}
+
 function printRestaurantHeader(printer, order) {
-  if (order.paid) {
+  if (isPaid(order)) {
     printer.alignCenter();
     printer.setTextSize(2, 2);
     printer.println("Paid");
@@ -199,7 +203,6 @@ function printOrderTypeHeader(printer, order, kitchen) {
 function printPreorderInfo(printer, order, kitchen) {
   if (!isScheduledTakeOut(order)) return;
 
-  printer.newLine();
   printer.setTextQuadArea();
   printer.println(`***Pre-Order ${kitchen}***`);
 
@@ -413,6 +416,7 @@ function printFooter(printer, order, kitchen) {
       printer.newLine();
       printer.println(`*Take Out ${kitchen}*`);
     } else {
+      printer.newLine();
       printPreorderInfo(printer, order, kitchen);
     }
   } else if (order.tableNumber) {
