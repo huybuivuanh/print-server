@@ -333,6 +333,7 @@ function printOrderItem(printer, item, index) {
   }
 
   if (item.instructions) {
+    printer.newLine();
     printer.println(`   * Note: "${item.instructions}"`.toUpperCase());
   }
 
