@@ -283,12 +283,14 @@ function printOrderDetails(printer, order) {
 function printOrderItem(printer, item, index) {
   const itemTotal = (item.price * item.quantity).toFixed(2);
 
-  printer.newLine();
+  if (index > 0) printer.newLine();
 
   printer.alignLeft();
   printer.bold(true);
   printer.setTextQuadArea();
-  printer.println(`${item.quantity}x ${item.name}`);
+  printer.println(
+    `${item.quantity > 1 ? `${item.quantity}x ` : ""}${item.name}`,
+  );
   printer.setTextNormal();
   printer.bold(true);
 
@@ -360,6 +362,7 @@ function printOrderItems(printer, groupedSections) {
       printer.alignLeft();
       printer.bold(true);
       printer.println("--------------------------------");
+      printer.newLine();
     }
   });
 }
