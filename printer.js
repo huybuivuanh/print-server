@@ -6,11 +6,7 @@ const {
 } = require("node-thermal-printer");
 const { CONFIG } = require("./config");
 const { formatPhone, toDateMaybe, formatDate } = require("./utils");
-const {
-  preprocessOrderItems,
-  groupItemsByKitchen,
-  getOrderTotals,
-} = require("./orderItems");
+const { groupItemsByKitchen, getOrderTotals } = require("./orderItems");
 
 function isScheduledTakeOut(order) {
   if (order.fulfillment?.kind === "scheduled") return true;
@@ -292,7 +288,7 @@ function printOrderItem(printer, item, index) {
   printer.alignLeft();
   printer.bold(true);
   printer.setTextQuadArea();
-  printer.println(item.displayName);
+  printer.println(`${item.quantity}x ${item.name}`);
   printer.setTextNormal();
   printer.bold(true);
 
@@ -431,8 +427,7 @@ async function printOrder(order, kitchen) {
   const printer = createPrinter();
 
   try {
-    const processedItems = preprocessOrderItems(order.orderItems);
-    const groupedSections = groupItemsByKitchen(processedItems);
+    const groupedSections = groupItemsByKitchen(order.orderItems);
 
     printRestaurantHeader(printer, order);
     printOrderTypeHeader(printer, order, kitchen);
