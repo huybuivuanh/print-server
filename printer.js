@@ -283,7 +283,7 @@ function printOrderDetails(printer, order) {
 function printOrderItem(printer, item, index) {
   const itemTotal = (item.price * item.quantity).toFixed(2);
 
-  if (index > 0) printer.newLine();
+  printer.newLine();
 
   printer.alignLeft();
   printer.bold(true);
