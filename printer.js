@@ -384,7 +384,7 @@ function printTotals(printer, order) {
     const discount = order.taxBreakDown?.discount;
     const discountLabel =
       discount?.discountType === "Amount"
-        ? `$${discount?.discountValue.toFixed(0)}`
+        ? `$${discount?.discountValue.toFixed(2)}`
         : `${discount?.discountValue.toFixed(0)}%`;
 
     printer.println(
