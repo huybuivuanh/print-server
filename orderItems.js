@@ -45,6 +45,60 @@ function groupItemsByKitchen(items) {
   return sections;
 }
 
+function preprocessOrderItem(item) {
+  const processed = { ...item };
+
+  if (processed.name === CONFIG.SPECIAL_ITEM) {
+    const mainOption = processed.options.find(
+      (opt) =>
+        opt.name !== CONFIG.OPTION_NAMES.EGG_ROLL &&
+        opt.name !== CONFIG.OPTION_NAMES.SPRING_ROLL,
+    );
+
+    if (mainOption) {
+      processed.name = `${processed.name}/${mainOption.name}`;
+      processed.options = processed.options.filter((opt) => opt !== mainOption);
+    }
+  }
+
+  const eggOption = processed.options.find(
+    (opt) => opt.name === CONFIG.OPTION_NAMES.EGG_ROLL,
+  );
+
+  const springOption = processed.options.find(
+    (opt) => opt.name === CONFIG.OPTION_NAMES.SPRING_ROLL,
+  );
+
+  if ((eggOption || springOption) && !(eggOption && springOption)) {
+    processed.name = `${processed.name}/${eggOption ? "ER" : "SP"}`;
+    processed.options = processed.options.filter(
+      (opt) => opt !== eggOption && opt !== springOption,
+    );
+  }
+
+  const riceNoodleOption = processed.options.find(
+    (opt) =>
+      opt.name === CONFIG.OPTION_NAMES.RICE ||
+      opt.name === CONFIG.OPTION_NAMES.NOODLES,
+  );
+
+  if (riceNoodleOption) {
+    const abbreviation =
+      riceNoodleOption.name === CONFIG.OPTION_NAMES.RICE ? "Rice" : "ND";
+    processed.name = `${processed.name}/${abbreviation}`;
+    processed.options = processed.options.filter(
+      (opt) => opt !== riceNoodleOption,
+    );
+  }
+
+  return processed;
+}
+
+function preprocessOrderItems(orderItems) {
+  if (!Array.isArray(orderItems)) return [];
+  return orderItems.map(preprocessOrderItem);
+}
+
 function getOrderTotals(order, fallbackSubtotal) {
   const tb = order.taxBreakDown || order.taxbreakdown;
   if (tb && typeof tb === "object") {
@@ -121,6 +175,7 @@ function calculateTogoTotal(togoItems) {
 }
 
 module.exports = {
+  preprocessOrderItems,
   normalizedKitchenType,
   groupItemsByKitchen,
   getOrderTotals,
