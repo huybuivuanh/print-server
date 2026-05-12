@@ -47,6 +47,14 @@ function groupItemsByKitchen(items) {
 
 function preprocessOrderItem(item) {
   const processed = { ...item };
+  const qty = processed.quantity ?? processed.qty ?? 1;
+  processed.quantity = qty;
+
+  if (!Array.isArray(processed.options) || processed.options.length === 0) {
+    processed.displayName =
+      qty > 1 ? `${qty}x ${processed.name}` : processed.name;
+    return processed;
+  }
 
   if (processed.name === CONFIG.SPECIAL_ITEM) {
     const mainOption = processed.options.find(
@@ -91,9 +99,11 @@ function preprocessOrderItem(item) {
     );
   }
 
+  processed.displayName =
+    qty > 1 ? `${qty}x ${processed.name}` : processed.name;
+
   return processed;
 }
-
 function preprocessOrderItems(orderItems) {
   if (!Array.isArray(orderItems)) return [];
   return orderItems.map(preprocessOrderItem);
