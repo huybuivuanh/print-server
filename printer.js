@@ -122,7 +122,6 @@ function detectUSBPrinter() {
     printerInfo.forEach((p) => {
       console.log(`  ${p.index}. VID: ${p.vidHex}, PID: ${p.pidHex}`);
     });
-    console.log("");
 
     // Use the first found printer
     const selected = printerInfo[0];

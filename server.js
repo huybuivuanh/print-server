@@ -116,10 +116,7 @@ function startSnapshotListenerWithRetry(
 
       db.collection("printQueue").onSnapshot(
         (snapshot) => {
-          if (snapshot.empty) {
-            console.log("No unprinted orders in snapshot");
-            return;
-          }
+          if (snapshot.empty) return;
 
           snapshot.docChanges().forEach((change) => {
             if (change.type === "removed") return;

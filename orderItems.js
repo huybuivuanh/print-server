@@ -148,42 +148,8 @@ function getOrderTotals(order, fallbackSubtotal) {
   };
 }
 
-function calculateTogoTotal(togoItems) {
-  if (!Array.isArray(togoItems) || togoItems.length === 0) return 0;
-
-  return togoItems.reduce((total, item) => {
-    const qty = item.quantity ?? item.qty ?? 1;
-    let itemTotal = (item.price || 0) * qty;
-
-    if (item.options?.length > 0) {
-      itemTotal += item.options.reduce(
-        (optTotal, opt) => optTotal + (opt.price || 0) * (opt.quantity || 1),
-        0,
-      );
-    }
-
-    if (item.extras?.length > 0) {
-      itemTotal += item.extras.reduce(
-        (extraTotal, extra) => extraTotal + (extra.price || 0),
-        0,
-      );
-    }
-
-    if (item.changes?.length > 0) {
-      itemTotal += item.changes.reduce(
-        (chgTotal, chg) => chgTotal + (chg.price || 0),
-        0,
-      );
-    }
-
-    return total + itemTotal;
-  }, 0);
-}
-
 module.exports = {
   preprocessOrderItems,
-  normalizedKitchenType,
   groupItemsByKitchen,
   getOrderTotals,
-  calculateTogoTotal,
 };
