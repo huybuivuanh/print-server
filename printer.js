@@ -287,7 +287,9 @@ function printOrderDetails(printer, order) {
 function printOrderItem(printer, item, index) {
   const itemTotal = (item.price * item.quantity).toFixed(2);
 
-  printer.newLine();
+  if (index > 0) {
+    printer.newLine();
+  }
 
   printer.alignLeft();
   printer.bold(true);
@@ -366,7 +368,6 @@ function printOrderItems(printer, groupedSections) {
       printer.alignLeft();
       printer.bold(true);
       printer.println("--------------------------------");
-      printer.newLine();
     }
   });
 }

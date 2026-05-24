@@ -18,7 +18,7 @@ function itemsMatchingStation(items, station) {
 }
 
 /**
- * Groups preprocessed items: appetizers, then kitchen types in KITCHEN_SECTION_ORDER, then to-go.
+ * Groups preprocessed items: appetizers, one main block (KITCHEN_SECTION_ORDER), then to-go.
  * Same grouping for dine-in and take-out (take-out is printed twice with different A/B labels only).
  */
 function groupItemsByKitchen(items) {
@@ -31,11 +31,12 @@ function groupItemsByKitchen(items) {
     sections.push({ label: "Appetizers", items: appetizers });
   }
 
+  const mainItems = [];
   for (const station of CONFIG.KITCHEN_SECTION_ORDER) {
-    const stationItems = itemsMatchingStation(items, station);
-    if (stationItems.length > 0) {
-      sections.push({ label: station, items: stationItems });
-    }
+    mainItems.push(...itemsMatchingStation(items, station));
+  }
+  if (mainItems.length > 0) {
+    sections.push({ label: "Main", items: mainItems });
   }
 
   if (togoItems.length > 0) {
@@ -51,8 +52,6 @@ function preprocessOrderItem(item) {
   processed.quantity = qty;
 
   if (!Array.isArray(processed.options) || processed.options.length === 0) {
-    processed.displayName =
-      qty > 1 ? `${qty}x ${processed.name}` : processed.name;
     return processed;
   }
 
@@ -98,9 +97,6 @@ function preprocessOrderItem(item) {
       (opt) => opt !== riceNoodleOption,
     );
   }
-
-  processed.displayName =
-    qty > 1 ? `${qty}x ${processed.name}` : processed.name;
 
   return processed;
 }
