@@ -63,78 +63,60 @@ if (IS_WINDOWS) {
   escpos.USB = escposUSB;
 }
 
-// Fallback VID and PID (if auto-detection fails) - Windows only
-const FALLBACK_VID = 0x0483; // Vendor ID
-const FALLBACK_PID = 0x5743; // Product ID
-
 // Function to detect USB printer (Windows only)
 function detectUSBPrinter() {
   if (!IS_WINDOWS) {
     throw new Error("USB printer detection is only available on Windows");
   }
 
-  try {
-    const printers = escpos.USB.findPrinter();
+  const printers = escpos.USB.findPrinter();
 
-    if (!printers || printers.length === 0) {
-      console.log("No USB printers found with auto-detection.");
-      console.log("Using fallback VID/PID...\n");
-      return { vid: FALLBACK_VID, pid: FALLBACK_PID };
-    }
-
-    console.log(`Found ${printers.length} USB printer(s):\n`);
-
-    // Extract VID/PID from each printer
-    const printerInfo = printers
-      .map((printer, index) => {
-        // VID/PID can be in deviceDescriptor
-        const vid =
-          printer.deviceDescriptor?.idVendor ||
-          printer.idVendor ||
-          printer.vendorId ||
-          printer.vid;
-        const pid =
-          printer.deviceDescriptor?.idProduct ||
-          printer.idProduct ||
-          printer.productId ||
-          printer.pid;
-
-        if (vid && pid) {
-          return {
-            index: index + 1,
-            vid: vid,
-            pid: pid,
-            vidHex: `0x${vid.toString(16).toUpperCase().padStart(4, "0")}`,
-            pidHex: `0x${pid.toString(16).toUpperCase().padStart(4, "0")}`,
-          };
-        }
-        return null;
-      })
-      .filter((p) => p !== null);
-
-    if (printerInfo.length === 0) {
-      console.log("Could not extract VID/PID from found printers.");
-      console.log("Using fallback VID/PID...\n");
-      return { vid: FALLBACK_VID, pid: FALLBACK_PID };
-    }
-
-    // Display all found printers
-    printerInfo.forEach((p) => {
-      console.log(`  ${p.index}. VID: ${p.vidHex}, PID: ${p.pidHex}`);
-    });
-
-    // Use the first found printer
-    const selected = printerInfo[0];
-    console.log(
-      `Using printer ${selected.index}: VID: ${selected.vidHex}, PID: ${selected.pidHex}\n`,
-    );
-
-    return { vid: selected.vid, pid: selected.pid };
-  } catch (error) {
-    console.log("Error during auto-detection:", error.message);
-    console.log("Using fallback VID/PID...\n");
-    return { vid: FALLBACK_VID, pid: FALLBACK_PID };
+  if (!printers || printers.length === 0) {
+    throw new Error("No USB printers found. Make sure the printer is connected and the WinUSB driver is installed (use Zadig).");
   }
+
+  console.log(`Found ${printers.length} USB printer(s):\n`);
+
+  const printerInfo = printers
+    .map((printer, index) => {
+      const vid =
+        printer.deviceDescriptor?.idVendor ||
+        printer.idVendor ||
+        printer.vendorId ||
+        printer.vid;
+      const pid =
+        printer.deviceDescriptor?.idProduct ||
+        printer.idProduct ||
+        printer.productId ||
+        printer.pid;
+
+      if (vid && pid) {
+        return {
+          index: index + 1,
+          vid: vid,
+          pid: pid,
+          vidHex: `0x${vid.toString(16).toUpperCase().padStart(4, "0")}`,
+          pidHex: `0x${pid.toString(16).toUpperCase().padStart(4, "0")}`,
+        };
+      }
+      return null;
+    })
+    .filter((p) => p !== null);
+
+  if (printerInfo.length === 0) {
+    throw new Error("Could not extract VID/PID from detected printers.");
+  }
+
+  printerInfo.forEach((p) => {
+    console.log(`  ${p.index}. VID: ${p.vidHex}, PID: ${p.pidHex}`);
+  });
+
+  const selected = printerInfo[0];
+  console.log(
+    `Using printer ${selected.index}: VID: ${selected.vidHex}, PID: ${selected.pidHex}\n`,
+  );
+
+  return { vid: selected.vid, pid: selected.pid };
 }
 
 function createPrinter() {
