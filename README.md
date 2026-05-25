@@ -1,6 +1,6 @@
 # Print Server
 
-A Node.js service that listens to a Firestore `printQueue` collection and prints thermal receipts for dine-in and take-out orders.
+A Node.js service that listens to a Firestore `printQueue` collection and prints thermal receipts for dine-in and take-out orders for Asian Le POS.
 
 ## How it works
 
@@ -63,6 +63,53 @@ npm start
 ```
 
 The server starts on `http://127.0.0.1:3000` and immediately begins listening to Firestore.
+
+### 5. Run as a Windows service (NSSM)
+
+Use [NSSM](https://nssm.cc/) so the print server starts on boot and restarts if Node crashes. Run these in an **Administrator** terminal.
+
+**Download and extract**
+
+1. Download: [nssm-2.24 build](https://www.nssm.cc/ci/nssm-2.24-101-g897c7ad.zip)
+2. Extract the zip (e.g. to `D:\nssm`). Use the `win64` folder on 64-bit Windows.
+
+**Install the service** (once per machine)
+
+Replace paths with your Node install and this project folder. Find Node with `where node` if needed.
+
+```powershell
+D:\nssm\win64\nssm.exe install PrintServer "C:\Program Files\nodejs\node.exe" "D:\Projects\print-server\server.js"
+D:\nssm\win64\nssm.exe set PrintServer AppDirectory "D:\Projects\print-server"
+```
+
+Use `node server.js` directly — do not point NSSM at `npm start` / nodemon for a background service.
+
+**Configure auto-start and restart**
+
+```powershell
+D:\nssm\win64\nssm.exe set PrintServer Start SERVICE_AUTO_START
+D:\nssm\win64\nssm.exe set PrintServer AppExit Default Restart
+D:\nssm\win64\nssm.exe set PrintServer AppRestartDelay 3000
+```
+
+**Start and check status**
+
+```powershell
+D:\nssm\win64\nssm.exe start PrintServer
+D:\nssm\win64\nssm.exe status PrintServer
+```
+
+**Useful commands**
+
+| Action | Command |
+|--------|---------|
+| Stop | `D:\nssm\win64\nssm.exe stop PrintServer` |
+| Restart | `D:\nssm\win64\nssm.exe restart PrintServer` |
+| Remove service | `D:\nssm\win64\nssm.exe remove PrintServer confirm` |
+
+Logs and I/O redirection can be configured in the NSSM GUI (`nssm edit PrintServer`) or via `nssm set` if you need stdout/stderr files for debugging.
+
+Ensure `admin-sdk.json` is in the project directory before starting the service — NSSM runs with the same working folder as `AppDirectory`.
 
 ## Project structure
 
