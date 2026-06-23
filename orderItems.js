@@ -27,20 +27,22 @@ function groupItemsByKitchen(items) {
 
   const sections = [];
 
+  const byName = (a, b) => a.name.localeCompare(b.name);
+
   if (appetizers.length > 0) {
-    sections.push({ label: "Appetizers", items: appetizers });
+    sections.push({ label: "Appetizers", items: appetizers.sort(byName) });
   }
 
   const mainItems = [];
   for (const station of CONFIG.KITCHEN_SECTION_ORDER) {
-    mainItems.push(...itemsMatchingStation(items, station));
+    mainItems.push(...itemsMatchingStation(items, station).sort(byName));
   }
   if (mainItems.length > 0) {
     sections.push({ label: "Main", items: mainItems });
   }
 
   if (togoItems.length > 0) {
-    sections.push({ label: "Togo Items", items: togoItems });
+    sections.push({ label: "Togo Items", items: togoItems.sort(byName) });
   }
 
   return sections;
@@ -105,46 +107,17 @@ function preprocessOrderItems(orderItems) {
   return orderItems.map(preprocessOrderItem);
 }
 
-function getOrderTotals(order, fallbackSubtotal) {
-  const tb = order.taxBreakDown || order.taxbreakdown;
-  if (tb && typeof tb === "object") {
-    const grandTotal =
-      typeof tb.total === "number"
-        ? tb.total
-        : typeof tb.grandTotal === "number"
-          ? tb.grandTotal
-          : null;
-    if (grandTotal != null) {
-      const subtotal =
-        typeof tb.subTotal === "number"
-          ? tb.subTotal
-          : typeof tb.subtotal === "number"
-            ? tb.subtotal
-            : (fallbackSubtotal ?? 0);
-      const pst = typeof tb.pst === "number" ? tb.pst : 0;
-      const gst = typeof tb.gst === "number" ? tb.gst : 0;
-      const disc = tb.discount;
-      let discountAmount = 0;
-      if (
-        disc &&
-        disc.discountType &&
-        disc.discountType !== "None" &&
-        typeof disc.discountAmount === "number"
-      ) {
-        discountAmount = disc.discountAmount;
-      }
-      return { subtotal, pst, gst, grandTotal, discountAmount };
-    }
-  }
-  const sub = fallbackSubtotal ?? order.total ?? 0;
-  const pst = sub * CONFIG.TAX.PST_RATE;
-  const gst = sub * CONFIG.TAX.GST_RATE;
+function getOrderTotals(order) {
+  const tb = order.taxBreakDown;
+  const disc = tb.discount;
+  const discountAmount =
+    disc && disc.discountType !== "None" ? disc.discountAmount : 0;
   return {
-    subtotal: sub,
-    pst,
-    gst,
-    grandTotal: sub + pst + gst,
-    discountAmount: 0,
+    subtotal: tb.subTotal,
+    pst: tb.pst,
+    gst: tb.gst,
+    grandTotal: tb.total,
+    discountAmount,
   };
 }
 

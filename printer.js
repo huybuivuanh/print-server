@@ -11,6 +11,7 @@ const {
   getOrderTotals,
   preprocessOrderItems,
 } = require("./orderItems");
+const { groupOrderItemsBySignature } = require("./orderItemGrouping");
 
 function isScheduledTakeOut(order) {
   if (order.fulfillment?.kind === "scheduled") return true;
@@ -72,7 +73,9 @@ function detectUSBPrinter() {
   const printers = escpos.USB.findPrinter();
 
   if (!printers || printers.length === 0) {
-    throw new Error("No USB printers found. Make sure the printer is connected and the WinUSB driver is installed (use Zadig).");
+    throw new Error(
+      "No USB printers found. Make sure the printer is connected and the WinUSB driver is installed (use Zadig).",
+    );
   }
 
   console.log(`Found ${printers.length} USB printer(s):\n`);
@@ -416,7 +419,9 @@ async function printOrder(order, kitchen) {
   const printer = createPrinter();
 
   try {
-    const processedItems = preprocessOrderItems(order.orderItems);
+    const processedItems = preprocessOrderItems(
+      groupOrderItemsBySignature(order.orderItems),
+    );
     const groupedSections = groupItemsByKitchen(processedItems);
 
     printRestaurantHeader(printer, order);
