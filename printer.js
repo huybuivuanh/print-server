@@ -434,18 +434,28 @@ async function printOrder(order, kitchen) {
 
     printer.cut();
 
-    // Platform-specific printing
-    if (IS_WINDOWS) {
-      // Windows: Use USB printing via escpos-usb
-      return await printViaUSB(printer);
-    } else {
-      // Linux: Use direct interface
-      return await printViaDirectInterface(printer);
-    }
+    return await sendToPrinter(printer);
   } catch (error) {
     console.error("Print error:", error);
     throw error;
   }
+}
+
+// Sends the drawer kick pulse through the receipt printer (drawer is wired to it).
+async function openCashDrawer() {
+  const printer = createPrinter();
+  printer.openCashDrawer();
+  return await sendToPrinter(printer);
+}
+
+// Platform-specific send
+async function sendToPrinter(printer) {
+  if (IS_WINDOWS) {
+    // Windows: Use USB printing via escpos-usb
+    return await printViaUSB(printer);
+  }
+  // Linux: Use direct interface
+  return await printViaDirectInterface(printer);
 }
 
 // Windows: Print via USB using escpos-usb
@@ -519,4 +529,4 @@ async function printViaDirectInterface(printer) {
   }
 }
 
-module.exports = { printOrder };
+module.exports = { printOrder, openCashDrawer };

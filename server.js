@@ -1,7 +1,7 @@
 const express = require("express");
 const { CONFIG } = require("./config");
 const { db } = require("./firestore");
-const { printOrder } = require("./printer");
+const { printOrder, openCashDrawer } = require("./printer");
 
 const app = express();
 
@@ -19,6 +19,7 @@ app.use(express.json());
 // ========== PRINT QUEUE ==========
 const printQueue = [];
 let isPrinting = false;
+const DRAWER_JOB = "cashDrawer";
 
 // ========== QUEUE PROCESSING ==========
 async function processQueue() {
@@ -26,6 +27,20 @@ async function processQueue() {
 
   isPrinting = true;
   const order = printQueue.shift();
+
+  // Cash drawer kicks share this queue so they never hit the USB printer mid-receipt.
+  if (order.kind === DRAWER_JOB) {
+    try {
+      await openCashDrawer();
+      console.log("💵 Cash drawer opened");
+    } catch (error) {
+      console.error("❌ Failed to open cash drawer:", error?.message || error);
+    } finally {
+      isPrinting = false;
+      processQueue();
+    }
+    return;
+  }
 
   try {
     // Prefer timestamps (and any missing fields) from the canonical order doc.
@@ -154,10 +169,70 @@ function startSnapshotListenerWithRetry(
   connect();
 }
 
+// ========== CASH DRAWER LISTENER ==========
+// The POS sets { openDrawer: true, requestedAt } on cashDrawer/main.
+// We reset openDrawer to false, then kick the drawer only if the request is fresh,
+// so a request queued while the tablet or this server was offline never pops it late.
+function startCashDrawerListenerWithRetry(
+  retryDelay = CONFIG.FIRESTORE.RETRY_DELAY,
+) {
+  const { COLLECTION, DOC_ID, MAX_AGE_MS } = CONFIG.CASH_DRAWER;
+  const drawerRef = db.collection(COLLECTION).doc(DOC_ID);
+
+  async function handleSnapshot(snap) {
+    const data = snap.exists ? snap.data() : null;
+    if (!data || data.openDrawer !== true) return;
+
+    // Only reset if the doc hasn't changed since this snapshot; if the POS sent
+    // a newer request in between, this fails and the next snapshot handles it.
+    try {
+      await drawerRef.update(
+        { openDrawer: false },
+        { lastUpdateTime: snap.updateTime },
+      );
+    } catch {
+      return;
+    }
+
+    const requestedMs = data.requestedAt?.toMillis?.();
+    const ageMs = requestedMs ? Date.now() - requestedMs : Infinity;
+    // abs() allows for a tablet clock that runs a little ahead of this machine.
+    if (Math.abs(ageMs) > MAX_AGE_MS) {
+      console.log(
+        `⏭️  Skipped stale cash drawer request (${Math.round(ageMs / 1000)}s old)`,
+      );
+      return;
+    }
+
+    // Jump ahead of receipts: someone is standing at the till waiting.
+    printQueue.unshift({ kind: DRAWER_JOB });
+    processQueue();
+  }
+
+  function connect() {
+    drawerRef.onSnapshot(
+      (snap) => {
+        handleSnapshot(snap).catch((err) =>
+          console.error("Cash drawer handler error:", err?.message || err),
+        );
+      },
+      (error) => {
+        console.error("Cash drawer listener error:", error.message);
+        console.log(`Retrying in ${retryDelay / 1000}s...`);
+        setTimeout(connect, retryDelay);
+      },
+    );
+    console.log("✅ Cash drawer listener connected!");
+  }
+
+  connect();
+}
+
 // ========== SERVER STARTUP ==========
 app.listen(CONFIG.SERVER.port, CONFIG.SERVER.host, () => {
   console.log(
     `🖨️  Print server running on ${CONFIG.SERVER.host}:${CONFIG.SERVER.port}`,
   );
   startSnapshotListenerWithRetry();
+  startCashDrawerListenerWithRetry();
 });

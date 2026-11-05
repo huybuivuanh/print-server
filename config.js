@@ -31,6 +31,13 @@ const CONFIG = {
   FIRESTORE: {
     RETRY_DELAY: 5000,
   },
+  CASH_DRAWER: {
+    // Firestore doc the POS writes { openDrawer: true, requestedAt } to.
+    COLLECTION: "cashDrawer",
+    DOC_ID: "main",
+    // Requests older than this (e.g. sent while offline) are cleared without opening.
+    MAX_AGE_MS: 30000,
+  },
   ORDER_TYPES: {
     DINE_IN: "Dine In",
     TAKE_OUT: "Take Out",

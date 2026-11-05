@@ -111,6 +111,16 @@ Logs and I/O redirection can be configured in the NSSM GUI (`nssm edit PrintServ
 
 Ensure `admin-sdk.json` is in the project directory before starting the service — NSSM runs with the same working folder as `AppDirectory`.
 
+## Cash drawer
+
+The POS opens the cash drawer (wired to the receipt printer) when a cash payment starts by writing `cashDrawer/main`:
+
+```
+{ openDrawer: true, requestedAt: <Timestamp, device clock> }
+```
+
+The server resets `openDrawer` to `false`, then sends the drawer kick only if `requestedAt` is within `CASH_DRAWER.MAX_AGE_MS` (30s). Older requests (sent while the tablet or server was offline) are cleared without opening. Drawer kicks go through the same queue as receipts, ahead of waiting receipts.
+
 ## Project structure
 
 ```
