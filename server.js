@@ -1,6 +1,6 @@
 const express = require("express");
 const { CONFIG } = require("./config");
-const { db } = require("./firestore");
+const { db, biz } = require("./firestore");
 const { printOrder, openCashDrawer } = require("./printer");
 
 const app = express();
@@ -52,7 +52,7 @@ async function processQueue() {
           order.orderType === CONFIG.ORDER_TYPES.DINE_IN
             ? "dineInOrders"
             : "takeOutOrders";
-        const orderRef = db.collection(collectionName).doc(order.id);
+        const orderRef = biz(collectionName).doc(order.id);
         const orderDoc = await orderRef.get();
 
         if (orderDoc.exists) {
@@ -91,8 +91,8 @@ async function processQueue() {
           ? "dineInOrders"
           : "takeOutOrders";
 
-      const orderRef = db.collection(collectionName).doc(order.id);
-      const queueRef = db.collection("printQueue").doc(order.printId);
+      const orderRef = biz(collectionName).doc(order.id);
+      const queueRef = biz("printQueue").doc(order.printId);
       const orderDoc = await orderRef.get();
 
       const batch = db.batch();
@@ -129,7 +129,7 @@ function startSnapshotListenerWithRetry(
     try {
       console.log("Attempting Firestore connection...");
 
-      db.collection("printQueue").onSnapshot(
+      biz("printQueue").onSnapshot(
         (snapshot) => {
           if (snapshot.empty) return;
 
@@ -177,7 +177,7 @@ function startCashDrawerListenerWithRetry(
   retryDelay = CONFIG.FIRESTORE.RETRY_DELAY,
 ) {
   const { COLLECTION, DOC_ID, MAX_AGE_MS } = CONFIG.CASH_DRAWER;
-  const drawerRef = db.collection(COLLECTION).doc(DOC_ID);
+  const drawerRef = biz(COLLECTION).doc(DOC_ID);
 
   async function handleSnapshot(snap) {
     const data = snap.exists ? snap.data() : null;

@@ -2,6 +2,12 @@
 
 A Node.js service that listens to a Firestore `printQueue` collection and prints thermal receipts for dine-in and take-out orders for Asian Le POS.
 
+> **Shared Firebase project:** this server uses the shared `asianlepos` project, where each
+> business's data is under `businesses/{id}/…`. It prints dine-in and take-out POS orders from
+> `businesses/{BUSINESS_ID}/printQueue` (and reads the order from `dineInOrders` / `takeOutOrders`, plus `cashDrawer/main`, in the same business). Set `BUSINESS_ID` in `config.js` to this restaurant's business doc id — the server
+> won't start without it. `admin-sdk.json` must be a service account key for `asianlepos`.
+
+
 ## How it works
 
 1. The server connects to Firestore and watches the `printQueue` collection for new documents.
