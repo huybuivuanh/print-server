@@ -9,7 +9,7 @@ const CONFIG = {
    * This restaurant's business id: the businesses/{id} doc in the shared asianlepos
    * Firebase project. Every queue and order is read from there. Required.
    */
-  BUSINESS_ID: "",
+  BUSINESS_ID: "ASQxXxfSedn4x1mdNCa2", // Asian Le
   AUTH_TOKEN: "Asianlerestaurant7799",
   PRINTER: {
     type: PrinterTypes.EPSON,
