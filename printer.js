@@ -9,6 +9,7 @@ const { formatPhone, toDateMaybe, formatDate } = require("./utils");
 const {
   groupItemsByKitchen,
   getOrderTotals,
+  getRewardsPoints,
   preprocessOrderItems,
 } = require("./orderItems");
 const { groupOrderItemsBySignature } = require("./orderItemGrouping");
@@ -367,14 +368,15 @@ function printTotals(printer, order) {
   printer.println(`Subtotal: $${subtotal.toFixed(2)}`);
   if (discountAmount > 0) {
     const discount = order.taxBreakDown?.discount;
+    const points = getRewardsPoints(order);
     const discountLabel =
-      discount?.discountType === "Amount"
-        ? `$${discount?.discountValue.toFixed(2)}`
-        : `${discount?.discountValue.toFixed(0)}%`;
+      points > 0
+        ? `Rewards (${points} pts)`
+        : discount?.discountType === "Amount"
+          ? `Discount ($${discount?.discountValue.toFixed(2)})`
+          : `Discount (${discount?.discountValue.toFixed(0)}%)`;
 
-    printer.println(
-      `Discount (${discountLabel}): -$${discountAmount.toFixed(2)}`,
-    );
+    printer.println(`${discountLabel}: -$${discountAmount.toFixed(2)}`);
     printer.println(
       `Taxable Subtotal: $${discount?.taxableSubtotal?.toFixed(2)}`,
     );

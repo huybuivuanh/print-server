@@ -121,8 +121,25 @@ function getOrderTotals(order) {
   };
 }
 
+/**
+ * Points behind the discount when it's a rewards redemption, otherwise 0.
+ * POS orders: loyalty.pointsRedeemed, and loyalty.redeemedAmount must still match the
+ * discount (staff may have swapped it for a manual one). Online orders:
+ * loyalty.pointsRedeemed once completed, loyalty.pointsToRedeem before that.
+ */
+function getRewardsPoints(order) {
+  const loyalty = order.loyalty;
+  const disc = order.taxBreakDown?.discount;
+  if (!loyalty || !disc || disc.discountType !== "Amount") return 0;
+  if (loyalty.redeemedAmount != null && loyalty.redeemedAmount !== disc.discountValue) {
+    return 0;
+  }
+  return loyalty.pointsRedeemed || loyalty.pointsToRedeem || 0;
+}
+
 module.exports = {
   preprocessOrderItems,
   groupItemsByKitchen,
   getOrderTotals,
+  getRewardsPoints,
 };
