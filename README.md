@@ -1,21 +1,24 @@
 # Print Server
 
-A Node.js service that listens to a Firestore `printQueue` collection and prints thermal receipts for dine-in and take-out orders for Asian Le POS.
+A Node.js service that prints thermal receipts for Asian Le: dine-in and take-out orders from the POS, and online (website) orders from the Orders app.
 
 > **Shared Firebase project:** this server uses the shared `asianlepos` project, where each
-> business's data is under `businesses/{id}/…`. It prints dine-in and take-out POS orders from
-> `businesses/{BUSINESS_ID}/printQueue` (and reads the order from `dineInOrders` / `takeOutOrders`, plus `cashDrawer/main`, in the same business). Set `BUSINESS_ID` in `config.js` to this restaurant's business doc id — the server
+> business's data is under `businesses/{id}/…`. In the same business it prints:
+> - POS orders from `printQueue` (order read from `dineInOrders` / `takeOutOrders`)
+> - online orders from `onlinePrintQueue` (order read from `orders`)
+>
+> and listens to `cashDrawer/main`. Set `BUSINESS_ID` in `config.js` to this restaurant's business doc id — the server
 > won't start without it. `admin-sdk.json` must be a service account key for `asianlepos`.
 
 
 ## How it works
 
-1. The server connects to Firestore and watches the `printQueue` collection for new documents.
-2. When an unprinted order appears, it is pushed into a local queue.
-3. Orders are printed one at a time to avoid collisions.
-4. After a successful print, the order document and its `printQueue` entry are marked `printed: true` in Firestore.
+1. The server connects to Firestore and watches every queue in `PRINT_QUEUES` (`printQueue` and `onlinePrintQueue`) for new documents.
+2. When an unprinted order appears, it is pushed into one shared local queue (tagged `pos` or `online`).
+3. Orders and cash drawer kicks are sent to the printer one at a time, so they never collide.
+4. After a successful print, the order document and its queue entry are marked `printed: true` in Firestore.
 
-Take-out orders are printed twice (lanes **B** then **A**) with different slip labels but identical line items.
+Take-out and online orders are printed twice (lanes **B** then **A**) with different slip labels but identical line items. Online slips say `*Online B*` / `*Online A*`, show the order number, and use the shortened names from `NAME_OVERRIDES` / `OPTION_OVERRIDES`.
 
 ## Platform support
 
@@ -61,6 +64,8 @@ Edit `config.js` to match your environment:
 | `SERVER.port / host` | Defaults to `127.0.0.1:3000` |
 | `TAKEOUT_PRINT_LANES` | Labels printed on take-out slips (default `["B", "A"]`) |
 | `KITCHEN_SECTION_ORDER` | Order of kitchen sections on the ticket |
+| `PRINT_QUEUES` | Firestore queues to print from, each tagged `pos` or `online` |
+| `NAME_OVERRIDES` / `OPTION_OVERRIDES` | Shorter names for long website item/option names (online tickets only) |
 
 ### 4. Run
 
@@ -151,7 +156,7 @@ The token is defined in `config.js`.
 
 ## Firestore schema
 
-The server reads from the `printQueue` collection. Each document is expected to have:
+The server reads from the `printQueue` and `onlinePrintQueue` collections. Each document is expected to have:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -159,6 +164,6 @@ The server reads from the `printQueue` collection. Each document is expected to 
 | `orderType` | string | `"Dine In"` or `"Take Out"` |
 | `orderItems` | array | Line items |
 | `printed` | boolean | Set to `true` after printing |
-| `printId` | string | Auto-set from the `printQueue` doc ID |
+| `printId` | string | Auto-set from the queue doc ID |
 
-After printing, the server also updates the corresponding `dineInOrders` or `takeOutOrders` document.
+After printing, the server also updates the corresponding `dineInOrders` / `takeOutOrders` document (POS) or `orders` document (online).

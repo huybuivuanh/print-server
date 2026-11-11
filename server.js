@@ -1,7 +1,7 @@
 const express = require("express");
 const { CONFIG } = require("./config");
 const { db, biz } = require("./firestore");
-const { printOrder, openCashDrawer } = require("./printer");
+const { printOrder, openCashDrawer, isTakeOutLike } = require("./printer");
 
 const app = express();
 
@@ -20,6 +20,14 @@ app.use(express.json());
 const printQueue = [];
 let isPrinting = false;
 const DRAWER_JOB = "cashDrawer";
+
+// Where the full order doc lives for a print job.
+function orderCollectionFor(order) {
+  if (order.source === "online") return "orders";
+  return order.orderType === CONFIG.ORDER_TYPES.DINE_IN
+    ? "dineInOrders"
+    : "takeOutOrders";
+}
 
 // ========== QUEUE PROCESSING ==========
 async function processQueue() {
@@ -48,11 +56,7 @@ async function processQueue() {
     // the original order time.
     try {
       if (order?.id && order?.orderType) {
-        const collectionName =
-          order.orderType === CONFIG.ORDER_TYPES.DINE_IN
-            ? "dineInOrders"
-            : "takeOutOrders";
-        const orderRef = biz(collectionName).doc(order.id);
+        const orderRef = biz(orderCollectionFor(order)).doc(order.id);
         const orderDoc = await orderRef.get();
 
         if (orderDoc.exists) {
@@ -71,7 +75,7 @@ async function processQueue() {
 
     console.log("Printing order:", order.id);
 
-    if (order.orderType === CONFIG.ORDER_TYPES.TAKE_OUT) {
+    if (isTakeOutLike(order)) {
       for (const lane of CONFIG.TAKEOUT_PRINT_LANES) {
         await printOrder(order, lane);
       }
@@ -86,13 +90,10 @@ async function processQueue() {
         `No printId for order ${order.id}; skipping Firestore printed flags (Partial Order)`,
       );
     } else {
-      const collectionName =
-        order.orderType === CONFIG.ORDER_TYPES.DINE_IN
-          ? "dineInOrders"
-          : "takeOutOrders";
+      const collectionName = orderCollectionFor(order);
 
       const orderRef = biz(collectionName).doc(order.id);
-      const queueRef = biz("printQueue").doc(order.printId);
+      const queueRef = biz(order.queueCollection).doc(order.printId);
       const orderDoc = await orderRef.get();
 
       const batch = db.batch();
@@ -123,13 +124,14 @@ async function processQueue() {
 
 // ========== FIRESTORE LISTENER ==========
 function startSnapshotListenerWithRetry(
+  { collection, source },
   retryDelay = CONFIG.FIRESTORE.RETRY_DELAY,
 ) {
   async function connect() {
     try {
-      console.log("Attempting Firestore connection...");
+      console.log(`Attempting Firestore connection (${collection})...`);
 
-      biz("printQueue").onSnapshot(
+      biz(collection).onSnapshot(
         (snapshot) => {
           if (snapshot.empty) return;
 
@@ -140,25 +142,34 @@ function startSnapshotListenerWithRetry(
             if (!order || order.printed === true) return;
 
             order.printId = change.doc.id;
+            order.queueCollection = collection;
+            order.source = source;
 
             const alreadyQueued = printQueue.some(
-              (o) => o.printId === order.printId,
+              (o) =>
+                o.printId === order.printId && o.queueCollection === collection,
             );
             if (alreadyQueued) return;
 
-            console.log("New order detected:", order.id || order.printId);
+            console.log(
+              `New ${source} order detected:`,
+              order.id || order.printId,
+            );
             printQueue.push(order);
             processQueue();
           });
         },
         (error) => {
-          console.error("Firestore listener error:", error.message);
+          console.error(
+            `Firestore listener error (${collection}):`,
+            error.message,
+          );
           console.log(`Retrying in ${retryDelay / 1000}s...`);
           setTimeout(connect, retryDelay);
         },
       );
 
-      console.log("✅ Firestore listener connected!");
+      console.log(`✅ Firestore listener connected (${collection})!`);
     } catch (err) {
       console.error("Failed to connect to Firestore:", err.message);
       console.log(`Retrying in ${retryDelay / 1000}s...`);
@@ -233,6 +244,6 @@ app.listen(CONFIG.SERVER.port, CONFIG.SERVER.host, () => {
   console.log(
     `🖨️  Print server running on ${CONFIG.SERVER.host}:${CONFIG.SERVER.port}`,
   );
-  startSnapshotListenerWithRetry();
+  CONFIG.PRINT_QUEUES.forEach((queue) => startSnapshotListenerWithRetry(queue));
   startCashDrawerListenerWithRetry();
 });

@@ -19,6 +19,22 @@ function isScheduledTakeOut(order) {
   return Boolean(order.isPreorder);
 }
 
+// Website orders from the Orders app (onlinePrintQueue).
+function isOnlineOrder(order) {
+  return order.source === "online";
+}
+
+// Online orders print like take-out: lanes, name/phone, ready time.
+function isTakeOutLike(order) {
+  return (
+    isOnlineOrder(order) || order.orderType === CONFIG.ORDER_TYPES.TAKE_OUT
+  );
+}
+
+function takeOutLabel(order) {
+  return isOnlineOrder(order) ? "Online" : "Take Out";
+}
+
 function staffDisplay(order) {
   if (typeof order.staff === "string" && order.staff.trim()) {
     return order.staff.trim();
@@ -175,11 +191,8 @@ function printOrderTypeHeader(printer, order, kitchen) {
   printer.setTextSize(2, 2);
   printer.bold(false);
 
-  if (
-    order.orderType === CONFIG.ORDER_TYPES.TAKE_OUT &&
-    !isScheduledTakeOut(order)
-  ) {
-    printer.println(`*Take Out ${kitchen}*`);
+  if (isTakeOutLike(order) && !isScheduledTakeOut(order)) {
+    printer.println(`*${takeOutLabel(order)} ${kitchen}*`);
   } else if (order.tableNumber) {
     printer.println(`Table: ${order.tableNumber}`);
   }
@@ -189,7 +202,8 @@ function printPreorderInfo(printer, order, kitchen) {
   if (!isScheduledTakeOut(order)) return;
 
   printer.setTextQuadArea();
-  printer.println(`***Pre-Order ${kitchen}***`);
+  const label = isOnlineOrder(order) ? "Online" : "Pre-Order";
+  printer.println(`***${label} ${kitchen}***`);
 
   const preorderDate = scheduledPickupDate(order);
   if (preorderDate) {
@@ -244,18 +258,17 @@ function printOrderDetails(printer, order) {
   }
 
   const readyMins = immediateReadyMinutes(order);
-  if (
-    order.orderType === CONFIG.ORDER_TYPES.TAKE_OUT &&
-    !isScheduledTakeOut(order) &&
-    readyMins != null
-  ) {
+  if (isTakeOutLike(order) && !isScheduledTakeOut(order) && readyMins != null) {
     printer.println(`Ready in: ${readyMins} mins`);
+  }
+  if (isOnlineOrder(order)) {
+    printer.println(`Order number: ${order.orderNumber}`);
   }
 
   printer.setTextQuadArea();
   printer.bold(false);
 
-  if (order.orderType === CONFIG.ORDER_TYPES.TAKE_OUT) {
+  if (isTakeOutLike(order)) {
     const custName = takeOutCustomerName(order);
     if (custName) {
       printer.println(`Name: ${custName.toUpperCase()}`);
@@ -401,10 +414,10 @@ function printFooter(printer, order, kitchen) {
   printer.setTextSize(2, 2);
   printer.bold(false);
 
-  if (order.orderType === CONFIG.ORDER_TYPES.TAKE_OUT) {
+  if (isTakeOutLike(order)) {
     if (!isScheduledTakeOut(order)) {
       printer.newLine();
-      printer.println(`*Take Out ${kitchen}*`);
+      printer.println(`*${takeOutLabel(order)} ${kitchen}*`);
     } else {
       printer.newLine();
       printPreorderInfo(printer, order, kitchen);
@@ -423,6 +436,7 @@ async function printOrder(order, kitchen) {
   try {
     const processedItems = preprocessOrderItems(
       groupOrderItemsBySignature(order.orderItems),
+      { applyNameOverrides: isOnlineOrder(order) },
     );
     const groupedSections = groupItemsByKitchen(processedItems);
 
@@ -531,4 +545,4 @@ async function printViaDirectInterface(printer) {
   }
 }
 
-module.exports = { printOrder, openCashDrawer };
+module.exports = { printOrder, openCashDrawer, isTakeOutLike };

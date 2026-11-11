@@ -48,13 +48,27 @@ function groupItemsByKitchen(items) {
   return sections;
 }
 
-function preprocessOrderItem(item) {
+function preprocessOrderItem(item, applyNameOverrides) {
   const processed = { ...item };
   const qty = processed.quantity ?? processed.qty ?? 1;
   processed.quantity = qty;
 
+  if (applyNameOverrides) {
+    const overrideName = CONFIG.NAME_OVERRIDES[processed.name];
+    if (overrideName) processed.name = overrideName;
+  }
+
   if (!Array.isArray(processed.options) || processed.options.length === 0) {
     return processed;
+  }
+
+  // Rename options up front. Maps to new objects so the source order items are
+  // never mutated.
+  if (applyNameOverrides) {
+    processed.options = processed.options.map((opt) => {
+      const overrideOption = CONFIG.OPTION_OVERRIDES[opt.name];
+      return overrideOption ? { ...opt, name: overrideOption } : opt;
+    });
   }
 
   if (processed.name === CONFIG.SPECIAL_ITEM) {
@@ -102,9 +116,13 @@ function preprocessOrderItem(item) {
 
   return processed;
 }
-function preprocessOrderItems(orderItems) {
+
+// applyNameOverrides: shorten long website names (online orders only).
+function preprocessOrderItems(orderItems, { applyNameOverrides = false } = {}) {
   if (!Array.isArray(orderItems)) return [];
-  return orderItems.map(preprocessOrderItem);
+  return orderItems.map((item) =>
+    preprocessOrderItem(item, applyNameOverrides),
+  );
 }
 
 function getOrderTotals(order) {
@@ -131,7 +149,10 @@ function getRewardsPoints(order) {
   const loyalty = order.loyalty;
   const disc = order.taxBreakDown?.discount;
   if (!loyalty || !disc || disc.discountType !== "Amount") return 0;
-  if (loyalty.redeemedAmount != null && loyalty.redeemedAmount !== disc.discountValue) {
+  if (
+    loyalty.redeemedAmount != null &&
+    loyalty.redeemedAmount !== disc.discountValue
+  ) {
     return 0;
   }
   return loyalty.pointsRedeemed || loyalty.pointsToRedeem || 0;
