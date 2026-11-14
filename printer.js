@@ -46,6 +46,80 @@ function loadReviewQR() {
 
 const REVIEW_QR_PNG = loadReviewQR();
 
+const LOGO_PATH = path.join(__dirname, "assets", "Logo.png");
+const LOGO_WIDTH = 400; // printer dots (~50mm at 203dpi; 80mm paper max is 576)
+// Pixels darker than this print black. The printer's own cutoff (128) drops the
+// light half of the gold lettering, so use a high one: anything not near-white is ink.
+const LOGO_THRESHOLD = 225;
+
+// Crops the white/transparent margin off the logo, shrinks it to LOGO_WIDTH by
+// averaging, and converts it to pure black/white. Returns null if it can't be loaded.
+function loadLogo() {
+  try {
+    const src = PNG.sync.read(fs.readFileSync(LOGO_PATH));
+    const { width: W, height: H, data } = src;
+
+    // Brightness as printed on white paper (transparent counts as white).
+    const lum = (x, y) => {
+      const i = (y * W + x) << 2;
+      const a = data[i + 3] / 255;
+      const c = (v) => v * a + 255 * (1 - a);
+      return (
+        0.2126 * c(data[i]) + 0.7152 * c(data[i + 1]) + 0.0722 * c(data[i + 2])
+      );
+    };
+
+    let x0 = W,
+      y0 = H,
+      x1 = -1,
+      y1 = -1;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        if (lum(x, y) < 245) {
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+      }
+    }
+    if (x1 < 0) throw new Error("logo is blank");
+
+    const cw = x1 - x0 + 1;
+    const ch = y1 - y0 + 1;
+    const ow = Math.min(LOGO_WIDTH, cw);
+    const oh = Math.round((ch * ow) / cw);
+    const out = new PNG({ width: ow, height: oh });
+
+    for (let y = 0; y < oh; y++) {
+      const sy0 = y0 + Math.floor((y * ch) / oh);
+      const sy1 = Math.max(y0 + Math.floor(((y + 1) * ch) / oh), sy0 + 1);
+      for (let x = 0; x < ow; x++) {
+        const sx0 = x0 + Math.floor((x * cw) / ow);
+        const sx1 = Math.max(x0 + Math.floor(((x + 1) * cw) / ow), sx0 + 1);
+        let sum = 0;
+        let n = 0;
+        for (let sy = sy0; sy < sy1; sy++) {
+          for (let sx = sx0; sx < sx1; sx++) {
+            sum += lum(sx, sy);
+            n++;
+          }
+        }
+        const v = sum / n < LOGO_THRESHOLD ? 0 : 255;
+        const d = (y * ow + x) << 2;
+        out.data[d] = out.data[d + 1] = out.data[d + 2] = v;
+        out.data[d + 3] = 255;
+      }
+    }
+    return PNG.sync.write(out);
+  } catch (error) {
+    console.error(`Could not load logo (${LOGO_PATH}):`, error.message);
+    return null;
+  }
+}
+
+const LOGO_PNG = loadLogo();
+
 function isScheduledTakeOut(order) {
   if (order.fulfillment?.kind === "scheduled") return true;
   return Boolean(order.isPreorder);
@@ -205,7 +279,7 @@ function isPaid(order) {
   return order.orderItems.every((item) => item.paid);
 }
 
-function printRestaurantHeader(printer, order) {
+async function printRestaurantHeader(printer, order) {
   if (isPaid(order)) {
     printer.alignCenter();
     printer.setTextSize(2, 2);
@@ -213,9 +287,13 @@ function printRestaurantHeader(printer, order) {
     printer.newLine();
   }
   printer.alignCenter();
-  printer.setTextQuadArea();
-  printer.bold(true);
-  printer.println(CONFIG.RESTAURANT.name);
+  if (LOGO_PNG) {
+    await printer.printImageBuffer(LOGO_PNG);
+    printer.newLine();
+  }
+  // printer.setTextQuadArea();
+  // printer.bold(true);
+  // printer.println(CONFIG.RESTAURANT.name);
 }
 
 function printOrderTypeHeader(printer, order, kitchen) {
@@ -483,7 +561,7 @@ async function printOrder(order, kitchen) {
     );
     const groupedSections = groupItemsByKitchen(processedItems);
 
-    printRestaurantHeader(printer, order);
+    await printRestaurantHeader(printer, order);
     printOrderTypeHeader(printer, order, kitchen);
     printPreorderInfo(printer, order, kitchen);
     printOrderDetails(printer, order);
