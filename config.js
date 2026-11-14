@@ -26,8 +26,10 @@ const CONFIG = {
   },
   RESTAURANT: {
     name: "Asian Le Restaurant",
-    address: "3-1400 6th Ave E",
+    address: "635 Branion Drive",
     phone: "306-764-7799",
+    website: "www.asianle.ca",
+    rewards: "rewards.asianle.ca",
   },
   SERVER: {
     port: 3000,

@@ -13,6 +13,38 @@ const {
   preprocessOrderItems,
 } = require("./orderItems");
 const { groupOrderItemsBySignature } = require("./orderItemGrouping");
+const fs = require("fs");
+const path = require("path");
+const { PNG } = require("pngjs");
+
+const REVIEW_QR_PATH = path.join(__dirname, "assets", "Google Review QR.png");
+const REVIEW_QR_SCALE = 2; // 132px source -> 264px (~33mm at 203dpi)
+
+// Loads the review QR once, scaled up with nearest-neighbour so modules stay sharp.
+// Returns null (and the receipt prints without the QR) if the file is missing or bad.
+function loadReviewQR() {
+  try {
+    const src = PNG.sync.read(fs.readFileSync(REVIEW_QR_PATH));
+    const s = REVIEW_QR_SCALE;
+    const out = new PNG({ width: src.width * s, height: src.height * s });
+    for (let y = 0; y < out.height; y++) {
+      for (let x = 0; x < out.width; x++) {
+        const si = (Math.floor(y / s) * src.width + Math.floor(x / s)) << 2;
+        const di = (y * out.width + x) << 2;
+        src.data.copy(out.data, di, si, si + 4);
+      }
+    }
+    return PNG.sync.write(out);
+  } catch (error) {
+    console.error(
+      `Could not load review QR (${REVIEW_QR_PATH}):`,
+      error.message,
+    );
+    return null;
+  }
+}
+
+const REVIEW_QR_PNG = loadReviewQR();
 
 function isScheduledTakeOut(order) {
   if (order.fulfillment?.kind === "scheduled") return true;
@@ -403,12 +435,23 @@ function printTotals(printer, order) {
   printer.newLine();
 }
 
-function printFooter(printer, order, kitchen) {
+async function printFooter(printer, order, kitchen) {
   printer.alignCenter();
   printer.underline(true);
-  printer.println("Thank you! Please come again!");
   printer.println(CONFIG.RESTAURANT.address);
   printer.println(CONFIG.RESTAURANT.phone);
+  printer.println(CONFIG.RESTAURANT.website);
+  printer.println("Thank you! Please come again!");
+  printer.println();
+  printer.underline(false);
+  // This clone printer ignores native QR (GS ( k), so print the QR as a raster image.
+  if (REVIEW_QR_PNG) {
+    await printer.printImageBuffer(REVIEW_QR_PNG);
+    printer.println();
+    printer.println("Scan to leave us a review!");
+    printer.println(`Join our rewards program: ${CONFIG.RESTAURANT.rewards}`);
+  }
+
   printer.underline(false);
 
   printer.setTextSize(2, 2);
@@ -446,7 +489,7 @@ async function printOrder(order, kitchen) {
     printOrderDetails(printer, order);
     printOrderItems(printer, groupedSections);
     printTotals(printer, order);
-    printFooter(printer, order, kitchen);
+    await printFooter(printer, order, kitchen);
 
     printer.cut();
 
