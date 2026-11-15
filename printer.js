@@ -9,7 +9,6 @@ const { formatPhone, toDateMaybe, formatDate } = require("./utils");
 const {
   groupItemsByKitchen,
   getOrderTotals,
-  getRewardsPoints,
   preprocessOrderItems,
 } = require("./orderItems");
 const { groupOrderItemsBySignature } = require("./orderItemGrouping");
@@ -484,25 +483,23 @@ function printTotals(printer, order) {
   printer.println("--------------------------------");
   printer.alignRight();
 
-  const { subtotal, pst, gst, grandTotal, discountAmount } =
+  const { subtotal, discount, rewards, taxableSubtotal, pst, gst, grandTotal } =
     getOrderTotals(order);
 
   printer.bold(false);
   printer.println(`Subtotal: $${subtotal.toFixed(2)}`);
-  if (discountAmount > 0) {
-    const discount = order.taxBreakDown?.discount;
-    const points = getRewardsPoints(order);
+  if (discount) {
     const discountLabel =
-      points > 0
-        ? `Rewards (${points} pts)`
-        : discount?.discountType === "Amount"
-          ? `Discount ($${discount?.discountValue.toFixed(2)})`
-          : `Discount (${discount?.discountValue.toFixed(0)}%)`;
-
-    printer.println(`${discountLabel}: -$${discountAmount.toFixed(2)}`);
-    printer.println(
-      `Taxable Subtotal: $${discount?.taxableSubtotal?.toFixed(2)}`,
-    );
+      discount.discountType === "Amount"
+        ? `Discount ($${discount.discountValue.toFixed(2)})`
+        : `Discount (${discount.discountValue.toFixed(0)}%)`;
+    printer.println(`${discountLabel}: -$${discount.discountAmount.toFixed(2)}`);
+  }
+  if (rewards) {
+    printer.println(`Rewards (${rewards.points} pts): -$${rewards.amount.toFixed(2)}`);
+  }
+  if (discount || rewards) {
+    printer.println(`Taxable Subtotal: $${taxableSubtotal.toFixed(2)}`);
   }
   printer.println(`PST (6%): $${pst.toFixed(2)}`);
   printer.println(`GST (5%): $${gst.toFixed(2)}`);

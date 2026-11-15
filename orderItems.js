@@ -125,42 +125,26 @@ function preprocessOrderItems(orderItems, { applyNameOverrides = false } = {}) {
   );
 }
 
+/**
+ * Receipt totals. Staff discount comes off the subtotal first, then rewards points, then
+ * tax is on `taxableSubtotal` (same shape as the POS / website / Orders app).
+ */
 function getOrderTotals(order) {
   const tb = order.taxBreakDown;
   const disc = tb.discount;
-  const discountAmount =
-    disc && disc.discountType !== "None" ? disc.discountAmount : 0;
   return {
     subtotal: tb.subTotal,
+    discount: disc && disc.discountType !== "None" && disc.discountAmount > 0 ? disc : null,
+    rewards: tb.rewards && tb.rewards.amount > 0 ? tb.rewards : null,
+    taxableSubtotal: tb.taxableSubtotal,
     pst: tb.pst,
     gst: tb.gst,
     grandTotal: tb.total,
-    discountAmount,
   };
-}
-
-/**
- * Points behind the discount when it's a rewards redemption, otherwise 0.
- * POS orders: loyalty.pointsRedeemed, and loyalty.redeemedAmount must still match the
- * discount (staff may have swapped it for a manual one). Online orders:
- * loyalty.pointsRedeemed once completed, loyalty.pointsToRedeem before that.
- */
-function getRewardsPoints(order) {
-  const loyalty = order.loyalty;
-  const disc = order.taxBreakDown?.discount;
-  if (!loyalty || !disc || disc.discountType !== "Amount") return 0;
-  if (
-    loyalty.redeemedAmount != null &&
-    loyalty.redeemedAmount !== disc.discountValue
-  ) {
-    return 0;
-  }
-  return loyalty.pointsRedeemed || loyalty.pointsToRedeem || 0;
 }
 
 module.exports = {
   preprocessOrderItems,
   groupItemsByKitchen,
   getOrderTotals,
-  getRewardsPoints,
 };
